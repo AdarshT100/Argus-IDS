@@ -1,0 +1,27 @@
+# filename: requirements.txt
+# purpose: Project dependencies
+# Core ML
+numpy==2.0.2
+pandas==2.3.3
+scikit-learn==1.6.1
+xgboost>=2.0.0
+imbalanced-learn>=0.12.0
+joblib==1.5.3
+shap==0.49.1
+
+# API
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+pydantic>=2.0.0
+httpx>=0.27.0
+
+# Frontend
+streamlit==1.50.0
+plotly==6.5.2
+
+# Alerting
+requests==2.32.5
+
+# Linting / testing (dev)
+flake8>=7.0.0
+pytest>=8.0.0
