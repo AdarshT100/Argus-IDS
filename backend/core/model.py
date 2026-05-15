@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import joblib
+import pandas as pd
 
 # All paths resolved from env var or default — no hardcoded absolute paths
 _MODEL_DIR: str = os.environ.get("ARGUS_MODEL_DIR", "backend/model")
@@ -44,6 +45,21 @@ def load_scaler() -> object | None:
 def load_features() -> list[str] | None:
     """Load the saved feature name list (rf_features.pkl)."""
     path = _model_path("rf_features.pkl")
+    return joblib.load(path) if os.path.exists(path) else None
+
+
+# Added load_X_test and load_X_test_raw to load saved X_test splits
+# for API routes and simulation (§7).
+
+def load_X_test() -> pd.DataFrame | None:
+    """Load the scaled X_test DataFrame saved during training."""
+    path = _model_path("X_test.pkl")
+    return joblib.load(path) if os.path.exists(path) else None
+
+
+def load_X_test_raw() -> pd.DataFrame | None:
+    """Load the unscaled X_test raw DataFrame saved before scaler application."""
+    path = _model_path("X_test_raw.pkl")
     return joblib.load(path) if os.path.exists(path) else None
 
 

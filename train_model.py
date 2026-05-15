@@ -88,6 +88,9 @@ def prepare_splits(
     )
     print(f"[split] Train: {len(X_train)}  Test: {len(X_test)}")
 
+    X_test_raw = X_test.copy()
+    joblib.dump(X_test_raw, os.path.join(MODEL_DIR, "X_test_raw.pkl"))
+
     # §5.2 step 4 — min-max normalisation (fit on train, transform both)
     scaler = MinMaxScaler()
     X_train_scaled = scaler.fit_transform(X_train)
@@ -115,6 +118,14 @@ def prepare_splits(
         feature_names = [f"PC{i+1}" for i in range(PCA_COMPONENTS)]
     else:
         print("[pca] PCA skipped (default). Set ARGUS_USE_PCA=true to enable.")
+
+# adding this here for convenience — saves the scaled X_test for later use in API routes and simulation (§7)
+    X_test_scaled_df = pd.DataFrame(
+        X_test_scaled,
+        columns=feature_names,
+        index=X_test.index,
+    )
+    joblib.dump(X_test_scaled_df, os.path.join(MODEL_DIR, "X_test.pkl"))
 
     return X_train_res, X_test_scaled, y_train_res, y_test.to_numpy(), feature_names, scaler
 

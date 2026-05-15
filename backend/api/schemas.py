@@ -52,3 +52,39 @@ class AlertsResponse(BaseModel):
 
     alerts: list[AlertEntry]
     total: int
+
+
+# Added /simulate and /predict/random schemas for §7 simulation and testing purposes.
+class SimulateRequest(BaseModel):
+    """POST /simulate request body."""
+
+    window_size: int = Field(
+        50,
+        description="Number of packets to simulate in the sliding window.",
+        example=50,
+    )
+
+
+class SimulateResponse(BaseModel):
+    """POST /simulate response body."""
+
+    timestamp: str
+    window_size: int
+    attack_count: int
+    anomaly_count: int
+    mean_risk_score: float
+    severity: str
+    alert_triggered: bool
+
+
+class PredictRandomResponse(PredictResponse):
+    """POST /predict/random response body."""
+
+    raw_features: dict[str, float]
+
+
+class SimulationsResponse(BaseModel):
+    """GET /simulations response body."""
+
+    simulations: list[SimulateResponse]
+    total: int

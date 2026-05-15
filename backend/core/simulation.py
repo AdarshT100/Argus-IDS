@@ -21,22 +21,26 @@ def _scale_packet(
     Returns a single-row DataFrame ready for predict() / predict_proba().
     Scaler must never be refit here — inference only (§5.2 step 4).
     """
-    packet_df = packet[feature_names].to_frame().T
+    packet_df = (
+        packet[feature_names]
+        .to_frame()
+        .T
+    )
     scaled = scaler.transform(packet_df)
     return pd.DataFrame(scaled, columns=feature_names)
 
 
+# Note: predict_packet() is called both from API routes (real inference)
+# and simulation (test set packets).
 def get_random_packet(
     X_test: pd.DataFrame,
-    y_test: pd.Series,
 ) -> tuple[pd.Series, int]:
     """
     Select a single random packet from the test set.
     X_test is already scaled (scaling happened in split_dataset).
-    Ported from prototype — no changes needed.
     """
     idx = np.random.randint(0, len(X_test))
-    return X_test.iloc[idx], int(y_test.iloc[idx])
+    return X_test.iloc[idx], int(idx)
 
 
 def predict_packet(
