@@ -36,6 +36,34 @@ class PredictResponse(BaseModel):
     timestamp: str           # ISO-8601 string
 
 
+class ExplainRequest(PredictRequest):
+    """POST /explain request body. Reuses the same raw feature mapping."""
+
+
+class ExplainResponse(BaseModel):
+    """POST /explain response body with SHAP contributions."""
+
+    feature_contributions: dict[str, float]
+    top_features: list[ShapFeature]
+    explanation_text: str
+
+
+class ThresholdMetricsResponse(BaseModel):
+    """GET /model/threshold response body."""
+
+    threshold: float
+    confusion_matrix: list[list[int]]
+    precision: float
+    recall: float
+    f1_score: float
+    support: int
+    total: int
+    tn: int
+    fp: int
+    fn: int
+    tp: int
+
+
 class AlertEntry(BaseModel):
     """Single entry in the alert log. Written on every /predict call."""
 

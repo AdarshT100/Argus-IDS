@@ -15,6 +15,8 @@ from fastapi import APIRouter, HTTPException
 from backend.api.schemas import (
     AlertEntry,
     AlertsResponse,
+    ExplainRequest,
+    ExplainResponse,
     PredictRandomResponse,
     PredictRequest,
     PredictResponse,
@@ -22,16 +24,22 @@ from backend.api.schemas import (
     SimulateRequest,
     SimulateResponse,
     SimulationsResponse,
+    ThresholdMetricsResponse,
 )
 from backend.core.model import (
     load_features,
     load_ensemble,
     load_iso_forest,
+    load_model_features,
+    load_metadata,
+    load_pca,
     load_scaler,
     load_X_test,
     load_X_test_raw,
+    load_y_test,
 )
 from backend.core.simulation import get_random_packet, predict_packet, simulate_window
+from sklearn.metrics import confusion_matrix, f1_score, precision_score, recall_score
 from backend.services.alert_dispatcher import dispatch_alert
 from backend.services.SHAP_explainer import (
     create_explainer,
@@ -49,6 +57,10 @@ _ensemble = None
 _iso_forest = None
 _scaler = None
 _features: list[str] | None = None
+_model_features: list[str] | None = None
+_pca = None
+_metadata: dict[str, object] | None = None
+_y_test: np.ndarray | None = None
 _explainer = None
 _X_test: pd.DataFrame | None = None
 _X_test_raw: pd.DataFrame | None = None
@@ -59,7 +71,7 @@ _simulation_log: Deque[SimulateResponse] = deque(maxlen=50)
 
 def _load_resources() -> None:
     """Load all artefacts into singletons. No-op after first call."""
-    global _ensemble, _iso_forest, _scaler, _features, _explainer, _X_test, _X_test_raw
+    global _ensemble, _iso_forest, _scaler, _features, _model_features, _pca, _metadata, _y_test, _explainer, _X_test, _X_test_raw
 
     if _ensemble is not None and _explainer is not None:
         return
@@ -68,13 +80,48 @@ def _load_resources() -> None:
     _iso_forest = load_iso_forest()
     _scaler = load_scaler()
     _features = load_features()
+    _model_features = load_model_features()
+    _pca = load_pca()
+    _metadata = load_metadata()
+    _y_test = load_y_test()
     _X_test = load_X_test()
     _X_test_raw = load_X_test_raw()
 
-    if any(x is None for x in [_ensemble, _iso_forest, _scaler, _features, _X_test, _X_test_raw]):
+    if any(
+        x is None
+        for x in [
+            _ensemble,
+            _iso_forest,
+            _scaler,
+            _features,
+            _model_features,
+            _metadata,
+            _y_test,
+            _X_test,
+            _X_test_raw,
+        ]
+    ):
         raise RuntimeError("One or more model artefacts failed to load — check backend/model/.")
 
+    if _metadata.get("ARGUS_USE_PCA") and _pca is None:
+        raise RuntimeError("Model metadata indicates PCA was used, but pca.pkl is missing.")
+
     _explainer = create_explainer(_ensemble)
+
+
+def _build_packet(request_features: dict[str, float]) -> pd.Series:
+    """Scale and optionally PCA-transform an incoming raw feature vector."""
+    if _features is None or _model_features is None or _scaler is None:
+        raise RuntimeError("Model artefacts are not loaded.")
+
+    raw_vector = np.array(
+        [float(request_features.get(f, 0.0)) for f in _features]
+    ).reshape(1, -1)
+    scaled_array = _scaler.transform(raw_vector)
+    if _pca is not None:
+        scaled_array = _pca.transform(scaled_array)
+
+    return pd.Series(scaled_array[0], index=_model_features)
 
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
@@ -93,33 +140,30 @@ async def predict(request: PredictRequest) -> PredictResponse:
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
-    # Build scaled single-row DataFrame in feature order
-    raw_vector = np.array(
-        [float(request.features.get(f, 0.0)) for f in _features]
-    ).reshape(1, -1)
-    scaled_array = _scaler.transform(raw_vector)
-    packet = pd.Series(scaled_array[0], index=_features)
+    packet = _build_packet(request.features)
 
     # §3.2 pipeline — predict_packet handles ensemble + iso_forest + decide()
     result = predict_packet(
         packet=packet,
         ensemble=_ensemble,
         iso_forest=_iso_forest,
-        feature_names=_features,
+        feature_names=_model_features,
     )
 
     # SHAP — generate_shap_analysis returns (shap_vector, explanation_text)
     packet_df = packet.to_frame().T
+    proba = _ensemble.predict_proba(packet_df)[0]
+    prediction_int = int(np.argmax(proba))
     shap_vector, _ = generate_shap_analysis(
         explainer=_explainer,
         packet_df=packet_df,
-        feature_names=_features,
-        prediction=result.prediction,
+        feature_names=_model_features,
+        prediction=prediction_int,
     )
 
     # get_top_shap_features returns list[dict], convert to list[ShapFeature]
     shap_dicts = get_top_shap_features(
-        feature_names=_features,
+        feature_names=_model_features,
         shap_vector=shap_vector,
         top_n=5,
     )
@@ -139,7 +183,7 @@ async def predict(request: PredictRequest) -> PredictResponse:
 
     entry = AlertEntry(
         timestamp=timestamp,
-        prediction="ATTACK" if result.prediction == 1 else "BENIGN",
+        prediction=result.prediction,
         severity=result.severity,
         confidence=round(result.confidence, 4),
         anomaly_score=round(result.anomaly_score, 4),
@@ -157,6 +201,79 @@ async def predict(request: PredictRequest) -> PredictResponse:
     )
 
 
+@router.post("/explain", response_model=ExplainResponse)
+async def explain(request: ExplainRequest) -> ExplainResponse:
+    """Return SHAP explainability for a single raw packet without dispatching an alert."""
+    try:
+        _load_resources()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    packet = _build_packet(request.features)
+    packet_df = packet.to_frame().T
+    proba = _ensemble.predict_proba(packet_df)[0]
+    prediction_int = int(np.argmax(proba))
+
+    shap_vector, explanation_text = generate_shap_analysis(
+        explainer=_explainer,
+        packet_df=packet_df,
+        feature_names=_model_features,
+        prediction=prediction_int,
+    )
+    feature_contributions = {
+        name: float(value)
+        for name, value in zip(_model_features, shap_vector)
+    }
+    shap_dicts = get_top_shap_features(
+        feature_names=_model_features,
+        shap_vector=shap_vector,
+        top_n=5,
+    )
+    top_features = [ShapFeature(**d) for d in shap_dicts]
+
+    return ExplainResponse(
+        feature_contributions=feature_contributions,
+        top_features=top_features,
+        explanation_text=explanation_text,
+    )
+
+
+@router.get("/model/threshold", response_model=ThresholdMetricsResponse)
+async def threshold_metrics(threshold: float = 0.5) -> ThresholdMetricsResponse:
+    """Compute confusion matrix and summary metrics for an arbitrary decision threshold."""
+    try:
+        _load_resources()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    if _y_test is None or _X_test is None:
+        raise HTTPException(status_code=503, detail="Threshold tuning artifacts are not available.")
+    if threshold < 0.0 or threshold > 1.0:
+        raise HTTPException(status_code=400, detail="threshold must be between 0.0 and 1.0")
+
+    y_prob = _ensemble.predict_proba(_X_test)[:, 1]
+    y_pred = (y_prob >= threshold).astype(int)
+    cm = confusion_matrix(_y_test, y_pred)
+    precision = precision_score(_y_test, y_pred, zero_division=0)
+    recall = recall_score(_y_test, y_pred, zero_division=0)
+    f1 = f1_score(_y_test, y_pred, zero_division=0)
+    support = int((_y_test == 1).sum())
+
+    return ThresholdMetricsResponse(
+        threshold=threshold,
+        confusion_matrix=cm.tolist(),
+        precision=round(float(precision), 4),
+        recall=round(float(recall), 4),
+        f1_score=round(float(f1), 4),
+        support=support,
+        total=int(len(_y_test)),
+        tn=int(cm[0, 0]),
+        fp=int(cm[0, 1]),
+        fn=int(cm[1, 0]),
+        tp=int(cm[1, 1]),
+    )
+
+
 # Added /simulate and /predict/random endpoints for §7 simulation and testing purposes.
 @router.post("/simulate", response_model=SimulateResponse)
 async def simulate(request: SimulateRequest) -> SimulateResponse:
@@ -170,7 +287,7 @@ async def simulate(request: SimulateRequest) -> SimulateResponse:
         ensemble=_ensemble,
         iso_forest=_iso_forest,
         X_test=_X_test,
-        feature_names=_features,
+        feature_names=_model_features,
         window_size=request.window_size,
     )
 
@@ -200,19 +317,21 @@ async def predict_random() -> PredictRandomResponse:
         packet=packet,
         ensemble=_ensemble,
         iso_forest=_iso_forest,
-        feature_names=_features,
+        feature_names=_model_features,
     )
 
     packet_df = packet.to_frame().T
+    proba = _ensemble.predict_proba(packet_df)[0]
+    prediction_int = int(np.argmax(proba))
     shap_vector, _ = generate_shap_analysis(
         explainer=_explainer,
         packet_df=packet_df,
-        feature_names=_features,
-        prediction=result.prediction,
+        feature_names=_model_features,
+        prediction=prediction_int,
     )
 
     shap_dicts = get_top_shap_features(
-        feature_names=_features,
+        feature_names=_model_features,
         shap_vector=shap_vector,
         top_n=5,
     )
@@ -236,7 +355,7 @@ async def predict_random() -> PredictRandomResponse:
         )
 
     entry = PredictRandomResponse(
-        prediction="ATTACK" if result.prediction == 1 else "BENIGN",
+        prediction=result.prediction,
         severity=result.severity,
         anomaly_score=round(result.anomaly_score, 4),
         confidence=round(result.confidence, 4),

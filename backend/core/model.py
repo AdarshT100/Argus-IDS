@@ -5,8 +5,10 @@
 
 from __future__ import annotations
 
+import json
 import os
 import joblib
+import numpy as np
 import pandas as pd
 
 # All paths resolved from env var or default — no hardcoded absolute paths
@@ -43,9 +45,36 @@ def load_scaler() -> object | None:
 
 
 def load_features() -> list[str] | None:
-    """Load the saved feature name list (rf_features.pkl)."""
+    """Load the saved raw feature name list (rf_features.pkl)."""
     path = _model_path("rf_features.pkl")
     return joblib.load(path) if os.path.exists(path) else None
+
+
+def load_model_features() -> list[str] | None:
+    """Load the saved model input feature names (model_features.pkl)."""
+    path = _model_path("model_features.pkl")
+    return joblib.load(path) if os.path.exists(path) else None
+
+
+def load_pca() -> object | None:
+    """Load the saved PCA transformer (pca.pkl) if present."""
+    path = _model_path("pca.pkl")
+    return joblib.load(path) if os.path.exists(path) else None
+
+
+def load_y_test() -> np.ndarray | None:
+    """Load the saved ground truth y_test labels for threshold tuning."""
+    path = _model_path("y_test.pkl")
+    return joblib.load(path) if os.path.exists(path) else None
+
+
+def load_metadata() -> dict[str, object] | None:
+    """Load training metadata and configuration summary."""
+    path = _model_path("metadata.json")
+    if not os.path.exists(path):
+        return None
+    with open(path, "r", encoding="utf-8") as metadata_file:
+        return json.load(metadata_file)
 
 
 # Added load_X_test and load_X_test_raw to load saved X_test splits

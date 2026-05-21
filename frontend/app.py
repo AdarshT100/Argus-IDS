@@ -1,510 +1,497 @@
-# filename: frontend/app.py
-# purpose: Streamlit UI — calls FastAPI only, no direct model imports (§7)
-# governed by: §7, §7.1, §9.1 (cold start /health check)
-
 import os
-from textwrap import dedent
-import streamlit as st
-
-# ── Config ──────────────────────────────────────────────────────────────────────
-ARGUS_API_URL: str = os.environ.get("ARGUS_API_URL", "http://localhost:8000")
-
-# ── Page config ─────────────────────────────────────────────────────────────────
-st.set_page_config(
-    page_title="Argus-IDS",
-    page_icon="🛡️",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
-# ── Section 1: Global CSS + Design System ───────────────────────────────────────
-st.markdown(dedent("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@300;400;500;600&display=swap');
-
-/* ── Design tokens ── */
-:root {
-    --bg:              #F8FAFC;
-    --bg-card:         #FFFFFF;
-    --bg-card-alt:     #F1F5F9;
-    --bg-card-hover:   #FAFCFF;
-    --border:          #E2E8F0;
-    --border-strong:   #CBD5E1;
-    --text-primary:    #0F172A;
-    --text-secondary:  #475569;
-    --text-muted:      #94A3B8;
-    --accent:          #1D4ED8;
-    --accent-hover:    #1E40AF;
-    --accent-light:    #EFF6FF;
-    --accent-mid:      #DBEAFE;
-
-    --high:            #DC2626;
-    --high-bg:         rgba(220, 38, 38, 0.07);
-    --high-border:     rgba(220, 38, 38, 0.25);
-    --medium:          #D97706;
-    --medium-bg:       rgba(217, 119, 6, 0.07);
-    --medium-border:   rgba(217, 119, 6, 0.25);
-    --low:             #16A34A;
-    --low-bg:          rgba(22, 163, 74, 0.07);
-    --low-border:      rgba(22, 163, 74, 0.25);
-    --anomaly:         #7C3AED;
-    --anomaly-bg:      rgba(124, 58, 237, 0.07);
-    --anomaly-border:  rgba(124, 58, 237, 0.25);
-
-    --mono:   'JetBrains Mono', monospace;
-    --sans:   'DM Sans', sans-serif;
-    --radius:    12px;
-    --radius-sm:  8px;
-    --radius-lg: 16px;
-
-    --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
-    --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
-    --shadow-md: 0 4px 16px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.05);
-    --shadow-lg: 0 10px 32px rgba(15, 23, 42, 0.10), 0 4px 12px rgba(15, 23, 42, 0.06);
-}
-
-/* ── Base reset ── */
-html, body, [class*="css"] {
-    font-family: var(--sans) !important;
-    color: var(--text-primary) !important;
-}
-.stApp {
-    background-color: var(--bg) !important;
-}
-#MainMenu, footer, header { visibility: hidden; }
-
-.block-container {
-    padding: 0 2.5rem 5rem !important;
-    max-width: 1480px !important;
-}
-
-/* ── Sidebar ── */
-[data-testid="stSidebar"] {
-    background: var(--bg-card) !important;
-    border-right: 1px solid var(--border) !important;
-    padding-top: 1.5rem !important;
-}
-[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
-    padding: 0 1.2rem !important;
-}
-[data-testid="stSidebar"] label {
-    font-family: var(--sans) !important;
-    font-size: 0.78rem !important;
-    font-weight: 600 !important;
-    color: var(--text-secondary) !important;
-    letter-spacing: 0.02em !important;
-    text-transform: uppercase !important;
-}
-
-/* ── Buttons ── */
-.stButton > button {
-    font-family: var(--sans) !important;
-    font-size: 0.82rem !important;
-    font-weight: 600 !important;
-    background: var(--accent) !important;
-    color: #FFFFFF !important;
-    border: none !important;
-    border-radius: var(--radius-sm) !important;
-    padding: 10px 22px !important;
-    width: 100% !important;
-    transition: all 0.18s ease !important;
-    letter-spacing: 0.01em !important;
-    cursor: pointer !important;
-}
-.stButton > button:hover {
-    background: var(--accent-hover) !important;
-    transform: translateY(-1px) !important;
-    box-shadow: 0 4px 14px rgba(29, 78, 216, 0.28) !important;
-}
-.stButton > button:active {
-    transform: translateY(0) !important;
-}
-
-/* Secondary button variant */
-.btn-secondary > button {
-    background: var(--bg-card) !important;
-    color: var(--text-secondary) !important;
-    border: 1px solid var(--border-strong) !important;
-    box-shadow: var(--shadow-xs) !important;
-}
-.btn-secondary > button:hover {
-    background: var(--bg-card-alt) !important;
-    color: var(--text-primary) !important;
-    box-shadow: var(--shadow-sm) !important;
-}
-
-/* Danger button variant */
-.btn-danger > button {
-    background: var(--high-bg) !important;
-    color: var(--high) !important;
-    border: 1px solid var(--high-border) !important;
-}
-.btn-danger > button:hover {
-    background: rgba(220, 38, 38, 0.12) !important;
-    box-shadow: 0 4px 14px rgba(220, 38, 38, 0.14) !important;
-}
-
-/* ── DataFrames ── */
-.stDataFrame {
-    border: 1px solid var(--border) !important;
-    border-radius: var(--radius) !important;
-    overflow: hidden !important;
-    box-shadow: var(--shadow-sm) !important;
-}
-.stDataFrame thead th {
-    font-family: var(--mono) !important;
-    background: var(--bg-card-alt) !important;
-    color: var(--text-muted) !important;
-    font-size: 0.60rem !important;
-    letter-spacing: 0.12em !important;
-    text-transform: uppercase !important;
-    font-weight: 500 !important;
-    border-bottom: 1px solid var(--border) !important;
-    padding: 12px 16px !important;
-}
-.stDataFrame tbody td {
-    font-family: var(--mono) !important;
-    font-size: 0.75rem !important;
-    color: var(--text-secondary) !important;
-    padding: 10px 16px !important;
-}
-.stDataFrame tbody tr:hover td {
-    background: var(--accent-light) !important;
-}
-
-/* ── Spinner ── */
-.stSpinner > div {
-    border-top-color: var(--accent) !important;
-}
-
-/* ── Headings ── */
-h1, h2, h3, h4, h5 {
-    font-family: var(--sans) !important;
-    color: var(--text-primary) !important;
-    font-weight: 700 !important;
-}
-
-/* ── Divider ── */
-hr {
-    border: none !important;
-    border-top: 1px solid var(--border) !important;
-    margin: 2rem 0 !important;
-}
-
-/* ── Plotly chart container ── */
-[data-testid="stPlotlyChart"] {
-    border: 1px solid var(--border) !important;
-    border-radius: var(--radius) !important;
-    overflow: hidden !important;
-    box-shadow: var(--shadow-sm) !important;
-}
-
-/* ── Streamlit metric — hidden in favour of HTML cards ── */
-[data-testid="metric-container"] { display: none !important; }
-
-/* ── Multiselect ── */
-[data-testid="stMultiSelect"] > div {
-    border-color: var(--border-strong) !important;
-    border-radius: var(--radius-sm) !important;
-    font-family: var(--sans) !important;
-    font-size: 0.82rem !important;
-}
-
-/* ── Reusable: section header ── */
-.argus-section-header {
-    display: flex;
-    align-items: baseline;
-    gap: 12px;
-    margin: 2.4rem 0 1.2rem;
-    padding-bottom: 10px;
-    border-bottom: 1px solid var(--border);
-}
-.argus-section-header .title {
-    font-family: 'DM Sans', sans-serif;
-    font-size: 1rem;
-    font-weight: 700;
-    color: #0F172A;
-    letter-spacing: -0.01em;
-}
-.argus-section-header .subtitle {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.60rem;
-    font-weight: 400;
-    color: #94A3B8;
-    letter-spacing: 0.10em;
-    text-transform: uppercase;
-}
-
-/* ── Severity badge ── */
-.sev-HIGH   { color: #DC2626; background: rgba(220,38,38,0.07);  border: 1px solid rgba(220,38,38,0.25); }
-.sev-MEDIUM { color: #D97706; background: rgba(217,119,6,0.07);  border: 1px solid rgba(217,119,6,0.25); }
-.sev-LOW    { color: #16A34A; background: rgba(22,163,74,0.07);  border: 1px solid rgba(22,163,74,0.25); }
-.sev-ANOMALY{ color: #7C3AED; background: rgba(124,58,237,0.07); border: 1px solid rgba(124,58,237,0.25); }
-</style>
-"""), unsafe_allow_html=True)
-
-# ── Section 2: Navbar ───────────────────────────────────────────────────────────
-import datetime
 import requests
 import streamlit as st
-import os
 
-ARGUS_API_URL: str = os.environ.get("ARGUS_API_URL", "http://localhost:8000")
+def get_backend_url():
+    return st.sidebar.text_input("Backend URL", value=os.getenv("ARGUS_BACKEND_URL", "http://localhost:8000"))
 
-# ── Navbar + Health Banner CSS ───────────────────────────────────────────────────
-# Injected as a plain string — NO f-string — so curly braces are safe
-st.markdown("""
-<style>
-.argus-navbar {
-    position: sticky;
-    top: 0;
-    z-index: 9999;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    padding: 0 2.5rem;
-    height: 60px;
-    background: rgba(255,255,255,0.92);
-    backdrop-filter: blur(12px) saturate(1.6);
-    -webkit-backdrop-filter: blur(12px) saturate(1.6);
-    border-bottom: 1px solid var(--border);
-    box-shadow: 0 1px 0 rgba(15,23,42,0.04), 0 2px 12px rgba(15,23,42,0.05);
-    margin: 0 -2.5rem 1.8rem;
-}
-.nav-left {
-    display: flex; align-items: center;
-    gap: 12px; flex-shrink: 0;
-}
-.nav-logo-wrap {
-    width: 36px; height: 36px;
-    background: var(--accent);
-    border-radius: 10px;
-    display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 2px 8px rgba(29,78,216,0.30);
-    flex-shrink: 0;
-}
-.nav-wordmark { display: flex; flex-direction: column; gap: 1px; line-height: 1; }
-.nav-title {
-    font-family: 'DM Sans', sans-serif;
-    font-size: 0.95rem; font-weight: 700;
-    color: var(--text-primary); letter-spacing: 0.12em;
-}
-.nav-subtitle {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.60rem; font-weight: 400;
-    color: var(--text-muted); letter-spacing: 0.08em; text-transform: uppercase;
-}
-.nav-right { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
-.nav-timestamp {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.68rem; color: var(--text-muted);
-    letter-spacing: 0.04em; white-space: nowrap;
-}
-.nav-model-badge {
-    display: flex; align-items: center; gap: 5px;
-    padding: 4px 10px;
-    background: var(--accent-light); border: 1px solid var(--accent-mid);
-    border-radius: 999px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.64rem; font-weight: 500;
-    color: var(--accent); white-space: nowrap; letter-spacing: 0.03em;
-}
-.nav-model-ver { opacity: 0.6; }
-.nav-status {
-    display: flex; align-items: center; gap: 7px;
-    padding: 4px 11px 4px 8px;
-    background: var(--bg-card-alt); border: 1px solid var(--border);
-    border-radius: 999px; white-space: nowrap;
-}
-.nav-status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.dot-online  { background: #16A34A; box-shadow: 0 0 0 2px #bbf7d0; }
-.dot-offline { background: #DC2626; box-shadow: 0 0 0 2px #fecaca; }
-.dot-unknown { background: #94A3B8; box-shadow: 0 0 0 2px #e2e8f0; }
-.dot-online.pulse { animation: navPulse 2.2s ease-in-out infinite; }
-@keyframes navPulse {
-    0%,100% { box-shadow: 0 0 0 2px #bbf7d0; }
-    50%      { box-shadow: 0 0 0 4px #bbf7d0; }
-}
-.nav-status-label {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.64rem; font-weight: 500; letter-spacing: 0.04em;
-}
-.label-online  { color: #16A34A; }
-.label-offline { color: #DC2626; }
-.label-unknown { color: #94A3B8; }
-.nav-spacer { flex: 1; }
-
-/* ── Health banner ── */
-.argus-health-banner {
-    display: flex; align-items: center; gap: 14px;
-    padding: 13px 20px;
-    border-radius: var(--radius);
-    margin-bottom: 1.6rem;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 0.82rem; font-weight: 500;
-    border: 1px solid;
-    animation: bannerSlide 0.3s ease;
-}
-@keyframes bannerSlide {
-    from { opacity: 0; transform: translateY(-6px); }
-    to   { opacity: 1; transform: translateY(0);    }
-}
-.argus-health-banner.online {
-    background: rgba(22,163,74,0.06);
-    border-color: rgba(22,163,74,0.25); color: #15803d;
-}
-.argus-health-banner.offline {
-    background: rgba(220,38,38,0.06);
-    border-color: rgba(220,38,38,0.25); color: #b91c1c;
-}
-.banner-icon { font-size: 1rem; flex-shrink: 0; }
-.banner-text { flex: 1; line-height: 1.45; }
-.banner-text strong {
-    font-weight: 700; display: block; font-size: 0.84rem; margin-bottom: 1px;
-}
-.banner-text span {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.68rem; opacity: 0.75;
-}
-</style>
-""", unsafe_allow_html=True)
-
-
-# ── Navbar HTML — f-string used only for dynamic runtime values ──────────────────
-def _render_navbar() -> None:
-    _now    = datetime.datetime.now().strftime("%d %b %Y  %H:%M")
-    _status = st.session_state.get("backend_status", "unknown")
-    _model  = st.session_state.get("model_name", "")
-    _ver    = st.session_state.get("model_version", "")
-
-    _labels = {"online": "Online", "offline": "Offline", "unknown": "Unknown"}
-    _label  = _labels.get(_status, "Unknown")
-    _pulse  = " pulse" if _status == "online" else ""
-
-    if _model:
-        _ver_html = f'<span class="nav-model-ver">&nbsp;{_ver}</span>' if _ver else ""
-        _badge = (
-            '<div class="nav-model-badge">'
-            '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" '
-            'stroke="currentColor" stroke-width="2.2" stroke-linecap="round" '
-            'stroke-linejoin="round" style="opacity:0.7">'
-            '<path d="M12 2L2 7l10 5 10-5-10-5z"/>'
-            '<path d="M2 17l10 5 10-5"/>'
-            '<path d="M2 12l10 5 10-5"/>'
-            f'</svg>{_model}{_ver_html}</div>'
-        )
-    else:
-        _badge = ""
-
-    st.markdown(
-        f'<nav class="argus-navbar">'
-        f'<div class="nav-left">'
-        f'<div class="nav-logo-wrap">'
-        f'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" '
-        f'stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
-        f'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'
-        f'<path d="M9 12l2 2 4-4" stroke-width="2.2"/>'
-        f'</svg></div>'
-        f'<div class="nav-wordmark">'
-        f'<span class="nav-title">ARGUS&#8209;IDS</span>'
-        f'<span class="nav-subtitle">Intrusion Detection System</span>'
-        f'</div></div>'
-        f'<div class="nav-spacer"></div>'
-        f'<div class="nav-right">'
-        f'<span class="nav-timestamp">&#128344;&nbsp;{_now}</span>'
-        f'{_badge}'
-        f'<div class="nav-status">'
-        f'<div class="nav-status-dot dot-{_status}{_pulse}"></div>'
-        f'<span class="nav-status-label label-{_status}">{_label}</span>'
-        f'</div></div></nav>',
-        unsafe_allow_html=True,
-    )
-
-
-_render_navbar()
-
-
-# ── Section 3: Health Check Banner ──────────────────────────────────────────────
-# governed by: §9.1
-
-def _do_health_check() -> None:
-    """
-    GET /health  →  { "status": "ok", "model": "...", "version": "..." }
-    Sets session_state keys: backend_status, health_checked,
-                             model_name, model_version, health_error
-    """
+def health_check(backend_url: str):
+    st.subheader("Backend Health")
     try:
-        resp = requests.get(f"{ARGUS_API_URL}/health", timeout=5)
-        if resp.status_code == 200:
-            data = resp.json()
-            st.session_state["backend_status"] = "online"
-            st.session_state["health_checked"] = True
-            st.session_state["model_name"]     = data.get("model",   "Model")
-            st.session_state["model_version"]  = data.get("version", "")
-            st.session_state["health_error"]   = None
+        resp = requests.get(f"{backend_url.rstrip('/')}/health", timeout=5)
+        if resp.ok:
+            try:
+                data = resp.json()
+            except Exception:
+                data = resp.text
+            st.success(f"Healthy — {data}")
         else:
-            raise ValueError(f"HTTP {resp.status_code}")
-    except Exception as exc:
-        st.session_state["backend_status"] = "offline"
-        st.session_state["health_checked"] = False
-        st.session_state["health_error"]   = str(exc)
+            st.error(f"Unhealthy — {resp.status_code} {resp.text}")
+    except Exception as e:
+        st.error(f"Error contacting backend: {e}")
+
+def overview_page(backend_url: str):
+    st.title("Argus IDS — Overview / Dashboard")
+    health_check(backend_url)
+    st.markdown("""\
+This is the initial Overview page. Charts and aggregates will be added iteratively.
+""")
+
+def placeholder_page(name: str):
+    def _page(backend_url: str):
+        st.title(name)
+        st.info("Not implemented yet. Will be added in subsequent steps.")
+    return _page
 
 
-if not st.session_state.get("health_checked", False):
-    with st.spinner("Connecting to Argus backend…"):
-        _do_health_check()
-    st.rerun()   # flip navbar dot + model badge immediately
+def _find_value_recursive(data, keys):
+    if isinstance(data, dict):
+        for key, value in data.items():
+            if key in keys and value is not None:
+                return value
+            found = _find_value_recursive(value, keys)
+            if found is not None:
+                return found
+    elif isinstance(data, list):
+        for item in data:
+            found = _find_value_recursive(item, keys)
+            if found is not None:
+                return found
+    return None
 
 
-# ── Banner render ────────────────────────────────────────────────────────────────
-_bs    = st.session_state.get("backend_status", "unknown")
-_err   = st.session_state.get("health_error",   "")
-_mname = st.session_state.get("model_name",     "—")
-_mver  = st.session_state.get("model_version",  "")
+def render_shap_and_explanation(result: dict):
+    shap_items = _find_value_recursive(result, ("shap_top_features", "top_features", "shap", "shap_values", "shap_values_top"))
+    explanation = _find_value_recursive(result, ("explanation_text", "explanation", "human_explanation", "reason", "why"))
 
-if _bs == "online":
-    _vs = f" &middot; v{_mver}" if _mver else ""
-    st.markdown(
-        f'<div class="argus-health-banner online">'
-        f'<span class="banner-icon">&#9989;</span>'
-        f'<div class="banner-text">'
-        f'<strong>Backend Online</strong>'
-        f'<span>{ARGUS_API_URL}&nbsp;&nbsp;&middot;&nbsp;&nbsp;model: {_mname}{_vs}</span>'
-        f'</div></div>',
-        unsafe_allow_html=True,
-    )
+    if isinstance(shap_items, dict):
+        shap_data = shap_items
+    elif isinstance(shap_items, list):
+        shap_data = shap_items
+    else:
+        shap_data = None
 
-else:
-    st.markdown(
-        f'<div class="argus-health-banner offline">'
-        f'<span class="banner-icon">&#128308;</span>'
-        f'<div class="banner-text">'
-        f'<strong>Backend Offline &#8212; cannot reach Argus API</strong>'
-        f'<span>{ARGUS_API_URL}&nbsp;&nbsp;&middot;&nbsp;&nbsp;{_err or "connection refused"}</span>'
-        f'</div></div>',
-        unsafe_allow_html=True,
-    )
+    if shap_data:
+        try:
+            import pandas as pd
+            import plotly.express as px
 
-    col_btn, col_pad = st.columns([1, 5])
-    with col_btn:
-        st.markdown('<div class="btn-secondary">', unsafe_allow_html=True)
-        if st.button("&#8635;  Retry Connection", key="health_retry_btn"):
-            for _k in ("health_checked", "backend_status", "health_error",
-                       "model_name", "model_version"):
-                st.session_state.pop(_k, None)
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+            if isinstance(shap_data, dict):
+                df = pd.DataFrame(list(shap_data.items()), columns=["feature", "shap_value"])
+            else:
+                df = pd.DataFrame(shap_data)
 
-    # ── HARD GATE ───────────────────────────────────────────────────────────────
-    st.stop()
+            feature_col = None
+            shap_col = None
+            cols = list(df.columns)
+            if "feature" in cols:
+                feature_col = "feature"
+            elif "name" in cols:
+                feature_col = "name"
+            elif len(cols) >= 1 and df[cols[0]].dtype == object:
+                feature_col = cols[0]
+            if feature_col is None and len(cols) >= 1:
+                feature_col = cols[0]
 
+            for c in cols:
+                if c == feature_col:
+                    continue
+                if pd.api.types.is_numeric_dtype(df[c]):
+                    shap_col = c
+                    break
+            if shap_col is None and len(cols) >= 2:
+                for c in cols:
+                    if c != feature_col:
+                        shap_col = c
+                        break
 
-# ── Sections 4–9 attach below this line ─────────────────────────────────────────
-st.markdown(
-    "<div style='font-family:JetBrains Mono,monospace;font-size:0.8rem;"
-    "color:#94A3B8;padding:3rem 0;'>§2–§3 complete. "
-    "Sections 4–9 build here.</div>",
-    unsafe_allow_html=True,
-)
+            if shap_col is None:
+                st.write("SHAP data present but no numeric SHAP column found.")
+            else:
+                plot_df = df[[feature_col, shap_col]].rename(columns={feature_col: "feature", shap_col: "shap_value"})
+                plot_df["shap_value"] = pd.to_numeric(plot_df["shap_value"], errors="coerce").fillna(0.0)
+                plot_df = plot_df.assign(abs_shap=plot_df["shap_value"].abs()).sort_values("abs_shap", ascending=False).head(20)
+                st.subheader("SHAP — top features")
+                fig = px.bar(plot_df, x="shap_value", y="feature", orientation='h', color="shap_value", color_continuous_scale='RdBu')
+                st.plotly_chart(fig, use_container_width=True)
+        except Exception as e:
+            st.write("SHAP data present but failed to render chart:", e)
 
+    if not explanation:
+        prediction = result.get("prediction") or result.get("label")
+        severity = result.get("severity")
+        if prediction or severity:
+            explanation_parts = []
+            if prediction and severity:
+                explanation_parts.append(f"Predicted **{prediction}** with severity **{severity}**.")
+            elif prediction:
+                explanation_parts.append(f"Predicted **{prediction}**.")
+            elif severity:
+                explanation_parts.append(f"Severity: **{severity}**.")
+
+            if isinstance(shap_items, list):
+                top_names = []
+                for item in shap_items[:4]:
+                    if isinstance(item, dict) and "feature" in item:
+                        top_names.append(item.get("feature"))
+                    elif isinstance(item, dict) and "name" in item:
+                        top_names.append(item.get("name"))
+                if top_names:
+                    explanation_parts.append("Top contributing features: " + ", ".join(top_names) + ".")
+            elif isinstance(shap_items, dict):
+                top_names = list(shap_items.keys())[:4]
+                if top_names:
+                    explanation_parts.append("Top contributing features: " + ", ".join(top_names) + ".")
+
+            explanation = " ".join(explanation_parts)
+
+    if explanation:
+        st.markdown("### Why this decision?")
+        st.info(explanation)
+
+def main():
+    st.set_page_config(page_title="Argus IDS UI", layout="wide")
+    backend_url = get_backend_url()
+
+    def real_time_prediction_page(backend_url: str):
+        st.title("Real-time Prediction")
+        st.markdown("Enter a single-packet JSON payload or use a random sample from the server.")
+
+        payload_text = st.text_area("Single-packet JSON", height=250, placeholder='{"feature1": val, "feature2": val, ... }')
+        btn_col1, btn_col2 = st.columns([1, 1])
+        with btn_col1:
+            predict_btn = st.button("Predict")
+        with btn_col2:
+            random_btn = st.button("Random sample from server")
+
+        if "last_prediction_result" not in st.session_state:
+            st.session_state.last_prediction_result = None
+
+        if random_btn:
+            try:
+                resp = requests.post(f"{backend_url.rstrip('/')}/predict/random", timeout=10)
+                if resp.ok:
+                    st.session_state.last_prediction_result = resp.json()
+                    st.success("Random prediction received")
+                else:
+                    st.error(f"Random predict failed: {resp.status_code} {resp.text}")
+            except Exception as e:
+                st.error(f"Error calling backend: {e}")
+
+        if predict_btn:
+            if not payload_text.strip():
+                st.warning("Please provide a single-packet JSON payload or use the random sample button.")
+            else:
+                try:
+                    import json
+                    payload = json.loads(payload_text)
+                    resp = requests.post(f"{backend_url.rstrip('/')}/predict", json=payload, timeout=10)
+                    if resp.ok:
+                        st.session_state.last_prediction_result = resp.json()
+                        st.success("Prediction returned")
+                    else:
+                        st.error(f"Predict failed: {resp.status_code} {resp.text}")
+                except Exception as e:
+                    st.error(f"Invalid JSON or backend error: {e}")
+
+        result_container = st.container()
+        if st.session_state.last_prediction_result is not None:
+            with result_container:
+                st.subheader("Prediction output")
+                st.json(st.session_state.last_prediction_result)
+                render_shap_and_explanation(st.session_state.last_prediction_result)
+
+    def render_simulation_results(sim_result: dict):
+        import pandas as pd
+        import plotly.express as px
+
+        # Try common keys
+        windows = None
+        if isinstance(sim_result, dict):
+            for key in ("windows", "results", "simulation_windows", "window_scores"):
+                if key in sim_result:
+                    windows = sim_result.get(key)
+                    break
+        if windows is None and isinstance(sim_result, list):
+            windows = sim_result
+
+        if windows:
+            try:
+                # windows expected as list of {timestamp, score, anomaly_count} or similar
+                df = pd.DataFrame(windows)
+                # find timestamp-like and score-like columns
+                time_col = None
+                score_col = None
+                for c in df.columns:
+                    if c.lower() in ("timestamp", "time", "ts"):
+                        time_col = c
+                    if c.lower() in ("score", "anomaly_score", "anomaly_rate", "risk", "avg_score"):
+                        score_col = c
+                if time_col is None and "start_time" in df.columns:
+                    time_col = "start_time"
+                if score_col is None:
+                    # pick first numeric column not time_col
+                    for c in df.columns:
+                        if c == time_col:
+                            continue
+                        if pd.api.types.is_numeric_dtype(df[c]):
+                            score_col = c
+                            break
+
+                if time_col:
+                    df[time_col] = pd.to_datetime(df[time_col], errors="coerce")
+                    df = df.sort_values(time_col)
+
+                st.subheader("Simulation windows")
+                st.write(df.head(10))
+
+                if time_col and score_col:
+                    fig = px.line(df, x=time_col, y=score_col, title="Window anomaly score over time")
+                    st.plotly_chart(fig, use_container_width=True)
+                elif score_col:
+                    fig = px.line(df, y=score_col, title="Window anomaly score (index)")
+                    st.plotly_chart(fig, use_container_width=True)
+            except Exception as e:
+                st.write("Failed to render simulation results:", e)
+        else:
+            st.write("No windowed results found in simulation response.")
+
+    def simulation_page(backend_url: str):
+        st.title("Simulation / Window Analysis")
+        st.markdown("Run a sliding-window simulation over server-side data and inspect past runs.")
+
+        with st.expander("Run new simulation"):
+            cols = st.columns(3)
+            window_size = cols[0].number_input("Window size", min_value=1, max_value=10000, value=100, step=1)
+            stride = cols[1].number_input("Stride", min_value=1, max_value=10000, value=10, step=1)
+            max_windows = cols[2].number_input("Max windows (0 = all)", min_value=0, max_value=100000, value=0, step=1)
+            run = st.button("Run simulation")
+
+            if run:
+                payload = {"window_size": int(window_size), "stride": int(stride)}
+                if int(max_windows) > 0:
+                    payload["max_windows"] = int(max_windows)
+                try:
+                    with st.spinner("Running simulation on server..."):
+                        resp = requests.post(f"{backend_url.rstrip('/')}/simulate", json=payload, timeout=120)
+                    if resp.ok:
+                        result = resp.json()
+                        st.success("Simulation completed / queued")
+                        st.json(result)
+                        render_simulation_results(result)
+                    else:
+                        st.error(f"Simulation failed: {resp.status_code} {resp.text}")
+                except Exception as e:
+                    st.error(f"Error calling simulate endpoint: {e}")
+
+        st.markdown("---")
+        st.subheader("Past simulations")
+
+        if "simulations" not in st.session_state:
+            st.session_state.simulations = None
+
+        if st.button("Refresh simulations list"):
+            try:
+                resp = requests.get(f"{backend_url.rstrip('/')}/simulations", timeout=10)
+                if resp.ok:
+                    st.session_state.simulations = resp.json()
+                else:
+                    st.error(f"Failed to list simulations: {resp.status_code} {resp.text}")
+            except Exception as e:
+                st.error(f"Error contacting backend for simulations: {e}")
+
+        if st.session_state.simulations is not None:
+            import pandas as pd
+            df = pd.DataFrame(st.session_state.simulations)
+            st.write(df)
+            sid = st.selectbox("Select simulation to inspect", options=[None] + list(df.index.astype(str)))
+            if sid:
+                try:
+                    if "id" in df.columns:
+                        sim_id = df.loc[int(sid), "id"]
+                    else:
+                        sim_id = sid
+                    dresp = requests.get(f"{backend_url.rstrip('/')}/simulations/{sim_id}", timeout=10)
+                    if dresp.ok:
+                        detail = dresp.json()
+                        st.json(detail)
+                        render_simulation_results(detail)
+                    else:
+                        st.info("No per-simulation detail endpoint; showing row data")
+                        st.json(df.loc[int(sid)].to_dict())
+                except Exception as e:
+                    st.write("Failed to fetch simulation detail:", e)
+
+    def alerts_page(backend_url: str):
+        st.title("Alerts / Log")
+        st.markdown("View network alerts detected by the model and refresh manually.")
+
+        if "alerts" not in st.session_state:
+            st.session_state.alerts = None
+
+        if st.button("Refresh alerts"):
+            try:
+                resp = requests.get(f"{backend_url.rstrip('/')}/alerts", timeout=10)
+                if resp.ok:
+                    data = resp.json()
+                    st.session_state.alerts = data.get("alerts", []) if isinstance(data, dict) else data
+                    st.session_state.alert_total = data.get("total", len(st.session_state.alerts)) if isinstance(data, dict) else len(st.session_state.alerts)
+                    st.success("Alerts refreshed")
+                else:
+                    st.error(f"Failed to load alerts: {resp.status_code} {resp.text}")
+            except Exception as e:
+                st.error(f"Error fetching alerts: {e}")
+
+        if st.session_state.alerts is None:
+            st.info("No alerts loaded yet. Click refresh to fetch alerts from the backend.")
+            return
+
+        try:
+            import pandas as pd
+
+            alerts_df = pd.json_normalize(st.session_state.alerts)
+            if "timestamp" in alerts_df.columns:
+                alerts_df["timestamp"] = pd.to_datetime(alerts_df["timestamp"], errors="coerce")
+                if alerts_df["timestamp"].dt.tz is not None:
+                    alerts_df["timestamp"] = alerts_df["timestamp"].dt.tz_convert(None)
+
+            prediction_col = next((c for c in alerts_df.columns if "pred" in c.lower() or c.lower() == "label"), None)
+            severity_col = next((c for c in alerts_df.columns if "severity" in c.lower()), None)
+
+            with st.expander("Filter alerts", expanded=True):
+                filter_cols = st.columns([2, 2, 3])
+                with filter_cols[0]:
+                    if prediction_col:
+                        pred_values = sorted(alerts_df[prediction_col].dropna().astype(str).unique())
+                    else:
+                        pred_values = []
+                    selected_predictions = st.multiselect(
+                        "Prediction",
+                        pred_values,
+                        default=st.session_state.get("alert_pred_filter", pred_values),
+                        key="alert_pred_filter",
+                    )
+                with filter_cols[1]:
+                    if severity_col:
+                        sev_values = sorted(alerts_df[severity_col].dropna().astype(str).unique())
+                    else:
+                        sev_values = []
+                    selected_severity = st.multiselect(
+                        "Severity",
+                        sev_values,
+                        default=st.session_state.get("alert_sev_filter", sev_values),
+                        key="alert_sev_filter",
+                    )
+                with filter_cols[2]:
+                    if "timestamp" in alerts_df.columns and not alerts_df["timestamp"].isna().all():
+                        min_date = alerts_df["timestamp"].min().date()
+                        max_date = alerts_df["timestamp"].max().date()
+                        default_range = st.session_state.get("alert_date_range", (min_date, max_date))
+                        date_range = st.date_input(
+                            "Date range",
+                            value=default_range,
+                            min_value=min_date,
+                            max_value=max_date,
+                            key="alert_date_range",
+                        )
+                    else:
+                        date_range = None
+
+            filtered_df = alerts_df.copy()
+            if prediction_col and selected_predictions is not None and selected_predictions:
+                filtered_df = filtered_df[filtered_df[prediction_col].astype(str).isin(selected_predictions)]
+            if severity_col and selected_severity is not None and selected_severity:
+                filtered_df = filtered_df[filtered_df[severity_col].astype(str).isin(selected_severity)]
+            if date_range and len(date_range) == 2 and "timestamp" in filtered_df.columns:
+                start_dt = pd.to_datetime(date_range[0])
+                end_dt = pd.to_datetime(date_range[1]) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
+                filtered_df = filtered_df[(filtered_df["timestamp"] >= start_dt) & (filtered_df["timestamp"] <= end_dt)]
+
+            st.markdown("---")
+            st.write(f"Showing **{len(filtered_df)}** alert rows.")
+            if not filtered_df.empty:
+                st.dataframe(filtered_df)
+                csv = filtered_df.to_csv(index=False).encode("utf-8")
+                st.download_button("Download filtered alerts as CSV", csv, file_name="alerts.csv", mime="text/csv")
+            else:
+                st.warning("No alerts match the selected filters.")
+        except Exception as e:
+            st.error(f"Failed to render alerts: {e}")
+
+    def model_evaluation_page(backend_url: str):
+        st.title("Model & Evaluation")
+        st.markdown("View available evaluation summaries derived from backend simulation and alert logs.")
+        st.info("Full confusion matrix, ROC/PR curves, and calibration data are not currently exposed by the API. This page shows best-effort charts from available endpoints.")
+
+        sim_data = None
+        alert_data = None
+        try:
+            resp = requests.get(f"{backend_url.rstrip('/')}/simulations", timeout=10)
+            if resp.ok:
+                sim_json = resp.json()
+                sim_data = sim_json.get("simulations", sim_json) if isinstance(sim_json, dict) else sim_json
+        except Exception:
+            st.warning("Could not fetch simulations data.")
+
+        try:
+            resp = requests.get(f"{backend_url.rstrip('/')}/alerts", timeout=10)
+            if resp.ok:
+                alerts_json = resp.json()
+                alert_data = alerts_json.get("alerts", alerts_json) if isinstance(alerts_json, dict) else alerts_json
+        except Exception:
+            st.warning("Could not fetch alerts data.")
+
+        if sim_data is None and alert_data is None:
+            st.error("No evaluation data available from the backend.")
+            return
+
+        import pandas as pd
+        import plotly.express as px
+
+        if sim_data is not None:
+            sim_df = pd.json_normalize(sim_data)
+            if sim_df.empty:
+                st.warning("Simulation endpoint returned no records.")
+            else:
+                st.subheader("Simulation summary")
+                st.metric("Simulation runs", len(sim_df))
+                if "severity" in sim_df.columns:
+                    severity_counts = sim_df["severity"].value_counts().reset_index()
+                    severity_counts.columns = ["severity", "count"]
+                    fig = px.bar(severity_counts, x="severity", y="count", color="severity", title="Simulation severity distribution")
+                    st.plotly_chart(fig, use_container_width=True)
+                if "attack_count" in sim_df.columns:
+                    fig = px.histogram(sim_df, x="attack_count", nbins=10, title="Attack count distribution")
+                    st.plotly_chart(fig, use_container_width=True)
+                if "mean_risk_score" in sim_df.columns:
+                    fig = px.line(sim_df, y="mean_risk_score", title="Mean risk score over recent simulation runs")
+                    st.plotly_chart(fig, use_container_width=True)
+
+        if alert_data is not None:
+            alerts_df = pd.json_normalize(alert_data)
+            if alerts_df.empty:
+                st.warning("Alert endpoint returned no records.")
+            else:
+                st.subheader("Alert log summary")
+                st.metric("Alert records", len(alerts_df))
+                if "severity" in alerts_df.columns:
+                    severity_counts = alerts_df["severity"].value_counts().reset_index()
+                    severity_counts.columns = ["severity", "count"]
+                    fig = px.pie(severity_counts, values="count", names="severity", title="Alert severity mix")
+                    st.plotly_chart(fig, use_container_width=True)
+                pred_col = next((c for c in alerts_df.columns if "pred" in c.lower() or c.lower() == "label"), None)
+                if pred_col is not None:
+                    pred_counts = alerts_df[pred_col].value_counts().reset_index()
+                    pred_counts.columns = ["prediction", "count"]
+                    fig = px.bar(pred_counts, x="prediction", y="count", title="Prediction distribution in alert log")
+                    st.plotly_chart(fig, use_container_width=True)
+                if "confidence" in alerts_df.columns:
+                    fig = px.histogram(alerts_df, x="confidence", nbins=10, title="Confidence distribution")
+                    st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("---")
+        st.markdown("**Note:** To support full model benchmarking, the backend should expose an evaluation endpoint with confusion matrix, ROC/PR, and calibration curve data.")
+
+    pages = {
+        "Overview": overview_page,
+        "Real-time Prediction": real_time_prediction_page,
+        "Simulation": simulation_page,
+        "Alerts": alerts_page,
+        "Model & Evaluation": model_evaluation_page,
+    }
+
+    page = st.sidebar.radio("Pages", list(pages.keys()))
+    pages[page](backend_url)
+
+if __name__ == "__main__":
+    main()
