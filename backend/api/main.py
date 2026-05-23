@@ -16,8 +16,8 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# CORS middleware — allow Streamlit frontend to call API without CORS errors
-ALLOWED_ORIGINS = os.getenv("ARGUS_ALLOWED_ORIGINS", "http://localhost:8501").split(",")
+# CORS middleware - allow the Vite frontend to call API without CORS errors
+ALLOWED_ORIGINS = os.getenv("ARGUS_ALLOWED_ORIGINS", "http://localhost:5173").split(",")
 
 app.add_middleware(
     CORSMiddleware,

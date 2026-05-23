@@ -11,7 +11,7 @@ anomaly detection for zero-days, and real-time alerting with a REST API backend.
 ## Stack
 
 - **Backend:** FastAPI (Railway)
-- **Frontend:** Streamlit (Streamlit Cloud)
+- **Frontend:** Vite + React + TypeScript (planned under `frontend/`)
 - **Models:** RF + XGBoost calibrated ensemble, Isolation Forest
 - **Explainability:** SHAP
 - **Dataset:** CICIDS2017 (primary), CIC IoT 2023 (secondary)
@@ -37,8 +37,9 @@ python train_anomaly.py     # Isolation Forest (benign traffic only)
 # Backend
 uvicorn backend.api.main:app --reload
 
-# Frontend (separate terminal)
-streamlit run frontend/app.py
+# Frontend
+# The previous Streamlit prototype has been removed.
+# The Vite React frontend will be scaffolded under frontend/.
 ```
 
 ## Architecture

@@ -13,12 +13,66 @@ build/
 venv/
 env/
 
-# Model artifacts (large binaries — managed separately per §9.2)
+# Frontend dependencies and generated builds
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Model artifacts and generated ML binaries
 backend/model/*.pkl
+backend/model/*.joblib
+backend/model/*.onnx
+backend/model/*.h5
+backend/model/*.keras
+backend/model/*.pt
+backend/model/*.pth
+backend/model/*.bin
 
 # Environment variables
 .env
 .env.*
+!.env.example
+!.env.sample
+!.env.template
+
+# Secrets, credentials, and private key material
+*.pem
+*.key
+*.p8
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+credentials.json
+credentials*.json
+secret.json
+secrets.json
+secrets*.json
+service-account*.json
+firebase-adminsdk*.json
+google-services.json
+DiscordWebhook*
+discord-webhook*
+
+# Local databases and runtime state
+*.db
+*.sqlite
+*.sqlite3
+*.duckdb
+*.log
+logs/
+tmp/
+temp/
 
 # macOS
 .DS_Store
@@ -35,5 +89,10 @@ htmlcov/
 # Streamlit
 .streamlit/secrets.toml
 
-#dataset
+# Datasets and local exports
 *.csv
+*.parquet
+*.feather
+*.xlsx
+*.xls
+*.jsonl
