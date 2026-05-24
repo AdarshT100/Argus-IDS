@@ -86,8 +86,8 @@ def prepare_splits(
     X: pd.DataFrame,
     y: pd.Series,
 ) -> tuple[
-    np.ndarray,
-    np.ndarray,
+    pd.DataFrame,
+    pd.DataFrame,
     np.ndarray,
     np.ndarray,
     list[str],
@@ -97,8 +97,10 @@ def prepare_splits(
 ]:
     """
     80/20 stratified split → min-max normalise → SMOTE on train only
-    → optional PCA.  Returns arrays ready for model training.
+    → optional PCA. Returns named DataFrames ready for model training.
     """
+    os.makedirs(MODEL_DIR, exist_ok=True)
+
     raw_feature_names: list[str] = X.columns.tolist()
     model_feature_names: list[str] = raw_feature_names
 
@@ -141,6 +143,10 @@ def prepare_splits(
     else:
         print("[pca] PCA skipped (default). Set ARGUS_USE_PCA=true to enable.")
 
+    X_train_res_df = pd.DataFrame(
+        X_train_res,
+        columns=model_feature_names,
+    )
     X_test_scaled_df = pd.DataFrame(
         X_test_scaled,
         columns=model_feature_names,
@@ -149,8 +155,8 @@ def prepare_splits(
     joblib.dump(X_test_scaled_df, os.path.join(MODEL_DIR, "X_test.pkl"))
 
     return (
-        X_train_res,
-        X_test_scaled,
+        X_train_res_df,
+        X_test_scaled_df,
         y_train_res,
         y_test.to_numpy(),
         raw_feature_names,
@@ -163,7 +169,7 @@ def prepare_splits(
 # Model training — RF + XGBoost + soft-voting ensemble (§3.4, §6)
 # ---------------------------------------------------------------------------
 def train_models(
-    X_train: np.ndarray,
+    X_train: pd.DataFrame,
     y_train: np.ndarray,
 ) -> tuple[RandomForestClassifier, XGBClassifier, VotingClassifier]:
     """Train RF and XGBoost individually, then combine into soft-voting ensemble."""
@@ -210,7 +216,7 @@ def train_models(
 # ---------------------------------------------------------------------------
 def calibrate_ensemble(
     ensemble: VotingClassifier,
-    X_train: np.ndarray,
+    X_train: pd.DataFrame,
     y_train: np.ndarray,
 ) -> CalibratedClassifierCV:
     """
@@ -234,7 +240,7 @@ def calibrate_ensemble(
 def evaluate_and_report(
     label: str,
     model: object,
-    X_test: np.ndarray,
+    X_test: pd.DataFrame,
     y_test: np.ndarray,
 ) -> float:
     """Print classification report, return accuracy. Warns if below §6.2 floor."""
@@ -266,7 +272,7 @@ def save_artefacts(
     model_feature_names: list[str],
     scaler: MinMaxScaler,
     pca: PCA | None,
-    X_test_scaled: np.ndarray,
+    X_test_scaled: pd.DataFrame,
     y_test: np.ndarray,
     raw_X_test: pd.DataFrame,
     y_train_res: np.ndarray,
@@ -387,7 +393,7 @@ def print_feature_importance(
 
 def _save_training_plots(
     model,
-    X_test: np.ndarray,
+    X_test: pd.DataFrame,
     y_test: np.ndarray,
     raw_model,
     calibrated_model,

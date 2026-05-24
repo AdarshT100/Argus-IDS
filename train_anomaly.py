@@ -99,7 +99,11 @@ def load_and_filter_benign(data_file: str, feature_names: list[str]) -> pd.DataF
     return benign_df[feature_names]
 
 
-def normalise_benign(X_benign: pd.DataFrame, scaler_path: str) -> np.ndarray:
+def normalise_benign(
+    X_benign: pd.DataFrame,
+    scaler_path: str,
+    feature_names: list[str],
+) -> pd.DataFrame:
     """
     Apply the already-fitted MinMaxScaler from train_model.py.
     Never refit the scaler here — Isolation Forest must see the same
@@ -114,14 +118,18 @@ def normalise_benign(X_benign: pd.DataFrame, scaler_path: str) -> np.ndarray:
     scaler = joblib.load(scaler_path)
     log.info("Loaded scaler from: %s", scaler_path)
 
-    X_scaled: np.ndarray = scaler.transform(X_benign)
+    X_scaled = pd.DataFrame(
+        scaler.transform(X_benign),
+        columns=feature_names,
+        index=X_benign.index,
+    )
     log.info("Normalisation applied — shape: %s", X_scaled.shape)
     return X_scaled
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def train_isolation_forest(
-    X_scaled: np.ndarray,
+    X_scaled: pd.DataFrame,
     contamination: float,
 ) -> IsolationForest:
     """
@@ -156,7 +164,7 @@ def save_model(model: IsolationForest, path: str) -> None:
 
 def print_summary(
     iso_forest: IsolationForest,
-    X_scaled: np.ndarray,
+    X_scaled: pd.DataFrame,
 ) -> None:
     """
     Score the training data and report the anomaly flag distribution.
@@ -203,7 +211,7 @@ if __name__ == "__main__":
     X_benign = load_and_filter_benign(DATA_FILE, feature_names)
 
     # 3. Normalise using the ensemble's scaler — never refit
-    X_scaled = normalise_benign(X_benign, SCALER_PATH)
+    X_scaled = normalise_benign(X_benign, SCALER_PATH, feature_names)
 
     # 4. Fit
     iso_forest = train_isolation_forest(X_scaled, CONTAMINATION)

@@ -16,31 +16,31 @@ Status: Complete
 
 ## Phase 2: Typed API Client
 
-Status: Not started
+Status: Complete
 
-- [ ] Add API request/response types matching `backend/api/schemas.py`.
-- [ ] Add shared backend config helper.
-- [ ] Add fetch helper with backend error handling.
-- [ ] Add client methods for health, alerts, simulations, prediction, explanation, and threshold metrics.
+- [x] Add API request/response types matching `backend/api/schemas.py`.
+- [x] Add shared backend config helper.
+- [x] Add fetch helper with backend error handling.
+- [x] Add client methods for health, alerts, simulations, prediction, explanation, and threshold metrics.
 
 ## Phase 3: TanStack Query
 
-Status: Not started
+Status: Complete
 
-- [ ] Install TanStack Query.
-- [ ] Add query hooks for health, alerts, simulations, and threshold metrics.
-- [ ] Add mutation hooks for prediction, random prediction, and simulation.
-- [ ] Invalidate alerts and simulations after relevant mutations.
+- [x] Install TanStack Query.
+- [x] Add query hooks for health, alerts, simulations, and threshold metrics.
+- [x] Add mutation hooks for prediction, random prediction, and simulation.
+- [x] Invalidate alerts and simulations after relevant mutations.
 
 ## Phase 4: API-Backed Pages
 
-Status: Not started
+Status: Complete
 
-- [ ] Dashboard renders backend health, alert summary, and simulation summary.
-- [ ] Predict page supports JSON input and random sample prediction.
-- [ ] Simulations page runs simulations and lists recent runs.
-- [ ] Alerts page renders recent alerts with local filtering.
-- [ ] Model Metrics page renders threshold metrics and validation errors.
+- [x] Dashboard renders backend health, alert summary, and simulation summary.
+- [x] Predict page supports JSON input and random sample prediction.
+- [x] Simulations page runs simulations and lists recent runs.
+- [x] Alerts page renders recent alerts with local filtering.
+- [x] Model Metrics page renders threshold metrics and validation errors.
 
 ## Phase 5: Charts
 
@@ -66,5 +66,9 @@ Status: Not started
 - The previous Streamlit frontend has been removed.
 - Phase 1 intentionally avoids backend calls, TanStack Query, Recharts, Tailwind, and shadcn/ui.
 - Phase 1 build and lint pass from `frontend/`.
+- Phase 2 adds a typed API client in `frontend/src/lib/api.ts` and shared response/request contracts in `frontend/src/lib/types.ts`.
 - `npm install` completed with Node engine warnings because local Node is `v23.11.0`; installed packages prefer Node `^20.19.0`, `^22.13.0`, or `>=24`.
 - Frontend dev origin is expected to be `http://localhost:5173`.
+- Phase 3 adds TanStack Query provider setup in `frontend/src/main.tsx` and reusable hooks in `frontend/src/lib/queries.ts`.
+- Phase 4 replaces placeholder page content with API-backed dashboard, prediction, simulation, alert filtering, and threshold metrics views in `frontend/src/App.tsx`.
+- Phase 4 build and lint pass from `frontend/`.
