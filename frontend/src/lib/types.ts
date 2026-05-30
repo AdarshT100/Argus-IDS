@@ -20,6 +20,7 @@ export type PredictResponse = {
   severity: Severity
   anomaly_score: number
   confidence: number
+  explanation_text: string
   shap_top_features: ShapFeature[]
   timestamp: string
 }

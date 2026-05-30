@@ -32,6 +32,7 @@ class PredictResponse(BaseModel):
     severity: str            # "LOW" | "MEDIUM" | "HIGH" | "ANOMALY"
     anomaly_score: float
     confidence: float
+    explanation_text: str
     shap_top_features: list[ShapFeature]
     timestamp: str           # ISO-8601 string
 

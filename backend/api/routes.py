@@ -154,7 +154,7 @@ async def predict(request: PredictRequest) -> PredictResponse:
     packet_df = packet.to_frame().T
     proba = _ensemble.predict_proba(packet_df)[0]
     prediction_int = int(np.argmax(proba))
-    shap_vector, _ = generate_shap_analysis(
+    shap_vector, explanation_text = generate_shap_analysis(
         explainer=_explainer,
         packet_df=packet_df,
         feature_names=_model_features,
@@ -196,6 +196,7 @@ async def predict(request: PredictRequest) -> PredictResponse:
         severity=entry.severity,
         anomaly_score=entry.anomaly_score,
         confidence=entry.confidence,
+        explanation_text=explanation_text,
         shap_top_features=shap_features,
         timestamp=timestamp,
     )
@@ -323,7 +324,7 @@ async def predict_random() -> PredictRandomResponse:
     packet_df = packet.to_frame().T
     proba = _ensemble.predict_proba(packet_df)[0]
     prediction_int = int(np.argmax(proba))
-    shap_vector, _ = generate_shap_analysis(
+    shap_vector, explanation_text = generate_shap_analysis(
         explainer=_explainer,
         packet_df=packet_df,
         feature_names=_model_features,
@@ -359,6 +360,7 @@ async def predict_random() -> PredictRandomResponse:
         severity=result.severity,
         anomaly_score=round(result.anomaly_score, 4),
         confidence=round(result.confidence, 4),
+        explanation_text=explanation_text,
         shap_top_features=shap_features,
         timestamp=timestamp,
         raw_features=raw_features,

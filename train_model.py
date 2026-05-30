@@ -4,8 +4,10 @@
 #           to backend/model/.
 # Governs : §5 (dataset + preprocessing), §6, §6.1, §6.2, §6.3
 
-import json
 import os
+os.environ.setdefault("OMP_NUM_THREADS", "2")  # Limit OpenMP threads to prevent resource contention
+
+import json
 import sys
 from datetime import datetime, timezone
 
@@ -16,6 +18,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from imblearn.over_sampling import SMOTE
+from imblearn.pipeline import Pipeline as ImbPipeline
+from imblearn.under_sampling import RandomUnderSampler
 from sklearn.calibration import CalibratedClassifierCV, calibration_curve
 from sklearn.decomposition import PCA
 from sklearn.ensemble import RandomForestClassifier, VotingClassifier
@@ -31,13 +35,12 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from xgboost import XGBClassifier
 
-# ---------------------------------------------------------------------------
-# Config — all paths via env var; no hardcoded paths (§6.1)
-# ---------------------------------------------------------------------------
 DATA_FILE: str = os.environ.get(
     "ARGUS_DATA_FILE",
     "Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv",
 )
+DATA_DIR: str | None = os.environ.get("ARGUS_DATA_DIR", None)
+
 MODEL_DIR: str = os.environ.get("ARGUS_MODEL_DIR", "backend/model")
 
 ENSEMBLE_FILE: str = os.path.join(MODEL_DIR, "ensemble_model.pkl")  # prediction
@@ -50,6 +53,7 @@ COLS_TO_DROP: list[str] = ["Flow ID", "Source IP", "Destination IP", "Timestamp"
 # PCA: off by default for primary results (§5.2 step 6)
 USE_PCA: bool = os.environ.get("ARGUS_USE_PCA", "false").lower() == "true"
 PCA_COMPONENTS: int = int(os.environ.get("ARGUS_PCA_COMPONENTS", "30"))
+DRY_RUN: bool = os.environ.get("ARGUS_DRY_RUN", "false").lower() == "true"
 
 MIN_ACCURACY: float = 0.95  # §6.2 — flag if below this
 
@@ -122,11 +126,14 @@ def prepare_splits(
     X_test_scaled = scaler.transform(X_test)
     print("[preprocess] Min-max normalisation applied.")
 
-    # §5.2 step 5 — SMOTE on training split only, never on test
-    smote = SMOTE(random_state=42)
-    X_train_res, y_train_res = smote.fit_resample(X_train_scaled, y_train)
+    # §5.2 step 5 — Under-sample majority THEN SMOTE on training split only
+    resample_pipeline = ImbPipeline(steps=[
+        ("under", RandomUnderSampler(random_state=42)),
+        ("smote", SMOTE(random_state=42)),
+    ])
+    X_train_res, y_train_res = resample_pipeline.fit_resample(X_train_scaled, y_train)
     print(
-        f"[smote] After resampling — "
+        f"[smote] Under+SMOTE resampling applied — "
         f"Benign: {(y_train_res == 0).sum()}  "
         f"Attack: {(y_train_res == 1).sum()}"
     )
@@ -179,7 +186,7 @@ def train_models(
     rf = RandomForestClassifier(
         n_estimators=100,
         random_state=42,
-        n_jobs=-1,
+        n_jobs=2,
     )
     rf.fit(X_train, y_train)
     print("[train] RF done.")
@@ -191,7 +198,7 @@ def train_models(
     xgb = XGBClassifier(
         n_estimators=100,
         random_state=42,
-        n_jobs=-1,
+        n_jobs=2,
         eval_metric="logloss",
         verbosity=0,
     )
@@ -285,6 +292,7 @@ def save_artefacts(
     xgb_accuracy: float,
     ensemble_raw_accuracy: float,
     calibrated_accuracy: float,
+    dataset_source: dict,
 ) -> None:
     """
     Save all model artefacts to MODEL_DIR.
@@ -363,6 +371,7 @@ def save_artefacts(
         "calibrated_accuracy": float(calibrated_accuracy),
         "calibration_status": "isotonic applied",
         "model_feature_names": model_feature_names,
+        "dataset_source": dataset_source,
     }
 
     metadata_path = os.path.join(MODEL_DIR, "metadata.json")
@@ -458,22 +467,147 @@ def _save_training_plots(
 
 
 def main() -> None:
-    X, y = load_and_preprocess(DATA_FILE)
+    # ── Dataset loading — multi-file or single-file ──────────────────────────
+    CACHE_X_TRAIN = os.path.join(MODEL_DIR, "cache_X_train_smoted.pkl")
+    CACHE_X_TEST = os.path.join(MODEL_DIR, "cache_X_test_scaled.pkl")
+    CACHE_Y_TRAIN = os.path.join(MODEL_DIR, "cache_y_train.pkl")
+    CACHE_Y_TEST = os.path.join(MODEL_DIR, "cache_y_test.pkl")
+    USE_CACHE: bool = os.environ.get("ARGUS_USE_CACHE", "false").lower() == "true"
 
-    (
-        X_train,
-        X_test,
-        y_train_res,
-        y_test,
-        feature_names,
-        scaler,
-        pca,
-        model_feature_names,
-    ) = prepare_splits(X, y)
+    if DRY_RUN and DATA_DIR:
+        csv_files = sorted(
+            f for f in os.listdir(DATA_DIR) if f.endswith(".csv")
+        )
+        if not csv_files:
+            raise FileNotFoundError(
+                f"No CSV files found in DATA_DIR={DATA_DIR} for dry run."
+            )
+
+        dry_file = os.path.join(DATA_DIR, csv_files[0])
+        print(f"[dry-run] Validating schema on first CSV: {dry_file}")
+
+        X, y = load_and_preprocess(dry_file)
+
+        original_joblib_dump = joblib.dump
+        joblib.dump = lambda *args, **kwargs: None
+        try:
+            (
+                X_train,
+                X_test,
+                y_train_res,
+                y_test,
+                feature_names,
+                scaler,
+                pca,
+                model_feature_names,
+            ) = prepare_splits(X, y)
+        finally:
+            joblib.dump = original_joblib_dump
+
+        print(f"[dry-run] Feature list: {feature_names}")
+        print(
+            f"[dry-run] Schema OK — X_train={X_train.shape}, X_test={X_test.shape}, "
+            f"features={len(feature_names)}"
+        )
+        print(
+            "[dry-run] Schema OK — re-run without ARGUS_DRY_RUN=true for full training"
+        )
+        sys.exit(0)
+
+    dataset_source: dict = {}
+    cache_loaded = False
+
+    if USE_CACHE and all(
+        os.path.exists(path)
+        for path in (CACHE_X_TRAIN, CACHE_X_TEST, CACHE_Y_TRAIN, CACHE_Y_TEST)
+    ):
+        print("[cache] Loaded cached splits — skipping CSV load and SMOTE")
+        X_train = joblib.load(CACHE_X_TRAIN)
+        X_test = joblib.load(CACHE_X_TEST)
+        y_train_res = joblib.load(CACHE_Y_TRAIN)
+        y_test = joblib.load(CACHE_Y_TEST)
+
+        rf_features_path = os.path.join(MODEL_DIR, "rf_features.pkl")
+        if os.path.exists(rf_features_path):
+            feature_names = joblib.load(rf_features_path)
+        else:
+            feature_names = X_train.columns.tolist()
+
+        model_feature_names = X_train.columns.tolist()
+        scaler_path = os.path.join(MODEL_DIR, "scaler.pkl")
+        scaler = joblib.load(scaler_path) if os.path.exists(scaler_path) else MinMaxScaler()
+        pca_path = os.path.join(MODEL_DIR, "pca.pkl")
+        pca = joblib.load(pca_path) if os.path.exists(pca_path) else None
+
+        dataset_source = {
+            "mode": "cache",
+            "cache_files": [
+                os.path.basename(CACHE_X_TRAIN),
+                os.path.basename(CACHE_X_TEST),
+                os.path.basename(CACHE_Y_TRAIN),
+                os.path.basename(CACHE_Y_TEST),
+            ],
+        }
+        cache_loaded = True
+    else:
+        if DATA_DIR:
+            print(f"[data] Multi-file mode — loading from directory: {DATA_DIR}")
+            from backend.core.data import load_multi_csv
+            combined_df = load_multi_csv(DATA_DIR)
+
+            # Label-encode and split X / y from the concatenated DataFrame
+            y = combined_df["Label"].apply(lambda v: 0 if v == "BENIGN" else 1)
+            X = combined_df.drop("Label", axis=1)
+
+            dataset_source = {
+                "mode": "multi_csv",
+                "data_dir": DATA_DIR,
+                "data_file": None,
+                "loaded_files": sorted(
+                    f for f in os.listdir(DATA_DIR) if f.endswith(".csv")
+                ),
+            }
+            print(
+                f"[data] Multi-file shape: {X.shape}  |  "
+                f"Benign: {(y == 0).sum()}  Attack: {(y == 1).sum()}"
+            )
+        else:
+            print(f"[data] Single-file mode — loading: {DATA_FILE}")
+            X, y = load_and_preprocess(DATA_FILE)  # existing function, unchanged
+            dataset_source = {
+                "mode": "single_file",
+                "data_dir": None,
+                "data_file": DATA_FILE,
+                "loaded_files": [os.path.basename(DATA_FILE)],
+            }
+
+        (
+            X_train,
+            X_test,
+            y_train_res,
+            y_test,
+            feature_names,
+            scaler,
+            pca,
+            model_feature_names,
+        ) = prepare_splits(X, y)
+
+        os.makedirs(MODEL_DIR, exist_ok=True)
+        joblib.dump(X_train, CACHE_X_TRAIN)
+        joblib.dump(X_test, CACHE_X_TEST)
+        joblib.dump(y_train_res, CACHE_Y_TRAIN)
+        joblib.dump(y_test, CACHE_Y_TEST)
+        print(f"[cache] Splits cached to {MODEL_DIR}/")
+
+    if cache_loaded:
+        if not os.path.exists(os.path.join(MODEL_DIR, "X_test_raw.pkl")):
+            raise FileNotFoundError(
+                "Cached splits loaded, but X_test_raw.pkl is missing from MODEL_DIR. "
+                "Run train_model.py once without ARGUS_USE_CACHE=true to create artefacts."
+            )
 
     rf, xgb, ensemble = train_models(X_train, y_train_res)
 
-    # Evaluate raw models before calibration (benchmarking reference)
     rf_accuracy = evaluate_and_report("Random Forest (raw)", rf, X_test, y_test)
     xgb_accuracy = evaluate_and_report("XGBoost (raw)", xgb, X_test, y_test)
     ensemble_raw_accuracy = evaluate_and_report(
@@ -516,6 +650,7 @@ def main() -> None:
         xgb_accuracy,
         ensemble_raw_accuracy,
         calibrated_accuracy,
+        dataset_source,       
     )
 
     _save_training_plots(
@@ -530,7 +665,6 @@ def main() -> None:
         print_feature_importance(rf, feature_names)
 
     print("\n[done] train_model.py complete. Check accuracy gate above before proceeding.")
-
 
 if __name__ == "__main__":
     main()

@@ -34,6 +34,129 @@ def load_dataset(filepath: str) -> pd.DataFrame:
     return df
 
 
+def load_multi_csv(
+    directory: str,
+    feature_list_override: list[str] | None = None,
+) -> pd.DataFrame:
+    """
+    Load and concatenate all .csv files from `directory` in sorted order.
+    Args:
+        directory: Path to folder containing CSVs (e.g. 'Dataset').
+        feature_list_override: If provided, restrict feature columns to this
+            exact list instead of computing the intersection. The 'Label'
+            column is always included regardless. Useful when retraining must
+            match a previously saved rf_features.pkl.
+
+    Returns:
+        Concatenated DataFrame. Columns: common feature set + 'Label'.
+        Column names are stripped. Inf/NaN rows are dropped.
+        Metadata columns (Flow ID, Source IP, Destination IP, Timestamp)
+        are removed. Index is reset.
+
+    Raises:
+        FileNotFoundError: If `directory` contains no .csv files.
+        ValueError: If 'Label' column is missing in any file, or if
+            `feature_list_override` contains columns absent from the
+            concatenated data.
+    """
+    import glob
+
+    csv_paths = sorted(glob.glob(os.path.join(directory, "*.csv")))
+    if not csv_paths:
+        raise FileNotFoundError(f"No .csv files found in directory: {directory!r}")
+
+    print(f"[multi_csv] Found {len(csv_paths)} file(s) in {directory!r}")
+
+    per_file_frames: list[pd.DataFrame] = []
+    per_file_row_counts: dict[str, int] = {}
+    per_file_col_sets: list[set[str]] = []
+
+    for path in csv_paths:
+        fname = os.path.basename(path)
+        print(f"[multi_csv]   Loading: {fname} ...", end=" ", flush=True)
+
+        # Chunked read to avoid loading entire raw file into memory
+        file_chunks: list[pd.DataFrame] = []
+        chunk_row_total = 0
+        for chunk in pd.read_csv(path, encoding="utf-8", chunksize=50_000):
+            chunk.columns = chunk.columns.str.strip()
+
+            # Drop metadata columns that carry no signal
+            for col in _DROP_COLS:
+                if col in chunk.columns:
+                    chunk.drop(col, axis=1, inplace=True)
+
+            # Inf → NaN → drop
+            chunk.replace([np.inf, -np.inf], np.nan, inplace=True)
+            chunk.dropna(inplace=True)
+
+            # Ensure Label column exists in this chunk (same behaviour as before)
+            if _LABEL_COL not in chunk.columns:
+                raise ValueError(
+                    f"'Label' column not found in {fname}. "
+                    "Check the file or the COLS_TO_DROP list."
+                )
+
+            file_chunks.append(chunk)
+            chunk_row_total += len(chunk)
+
+        # Concatenate cleaned chunks for this file
+        if file_chunks:
+            df = pd.concat(file_chunks, ignore_index=True)
+        else:
+            # No valid data after cleaning; create empty frame with no rows
+            df = pd.DataFrame()
+
+        row_count = len(df)
+        per_file_row_counts[fname] = row_count
+        per_file_frames.append(df)
+
+        # Track feature columns (everything except Label) for intersection
+        feature_cols = set(df.columns) - {_LABEL_COL}
+        per_file_col_sets.append(feature_cols)
+
+        benign = (df[_LABEL_COL].str.strip().str.upper() == "BENIGN").sum()
+        attack = row_count - benign
+        print(f"{row_count:,} rows  (benign={benign:,}  attack={attack:,})")
+
+    # Resolve common feature schema
+    common_features: list[str] = sorted(set.intersection(*per_file_col_sets))
+    print(f"[multi_csv] Common feature columns: {len(common_features)}")
+
+    # Validate feature_list_override against common schema
+    if feature_list_override is not None:
+        missing = [f for f in feature_list_override if f not in common_features]
+        if missing:
+            raise ValueError(
+                f"feature_list_override contains columns not present in all files: {missing}"
+            )
+        selected_features = feature_list_override
+        print(f"[multi_csv] Using feature_list_override: {len(selected_features)} columns")
+    else:
+        selected_features = common_features
+
+    # Restrict each frame to selected features + Label, then concatenate
+    aligned_frames = [df[selected_features + [_LABEL_COL]] for df in per_file_frames]
+    combined = pd.concat(aligned_frames, ignore_index=True)
+
+    # Summary log
+    total = len(combined)
+    benign_total = (combined[_LABEL_COL].str.strip().str.upper() == "BENIGN").sum()
+    attack_total = total - benign_total
+
+    print("[multi_csv] ── Concatenation complete ──────────────────────────────")
+    print(f"[multi_csv]   Files loaded      : {len(csv_paths)}")
+    print(f"[multi_csv]   Total rows        : {total:,}")
+    print(f"[multi_csv]   Benign rows       : {benign_total:,}")
+    print(f"[multi_csv]   Attack rows       : {attack_total:,}")
+    print(f"[multi_csv]   Feature columns   : {len(selected_features)}")
+    for fname, count in per_file_row_counts.items():
+        print(f"[multi_csv]     {fname}: {count:,} rows")
+    print("[multi_csv] ────────────────────────────────────────────────────────")
+
+    return combined
+
+
 def split_dataset(
     df: pd.DataFrame,
     feature_names: list[str],
@@ -41,7 +164,7 @@ def split_dataset(
     pca_components: int = 30,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
     """
-    Apply §5.2 steps 3–6 in correct order, then return train/test splits.
+    Apply §5.2 steps 3-6 in correct order, then return train/test splits.
 
     Step 3: label encode
     Step 4: 80/20 stratified split (fit scaler on train only — §5.1)

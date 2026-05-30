@@ -1,5 +1,36 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import './App.css'
+import { Alert } from './components/ui/alert'
+import { Badge } from './components/ui/badge'
+import { Button } from './components/ui/button'
+import { Input } from './components/ui/input'
+import { Select } from './components/ui/select'
+import { Skeleton } from './components/ui/skeleton'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  TableWrap,
+} from './components/ui/table'
+import { Textarea } from './components/ui/textarea'
 import { backendUrl } from './lib/config'
 import {
   useAlertsQuery,
@@ -110,14 +141,15 @@ function App() {
 
         <nav className="nav-list">
           {pages.map((item) => (
-            <button
+            <Button
               key={item.key}
-              className={item.key === activePage ? 'nav-item active' : 'nav-item'}
-              type="button"
+              aria-current={item.key === activePage ? 'page' : undefined}
+              className={item.key === activePage ? 'active' : undefined}
+              variant="ghost"
               onClick={() => setActivePage(item.key)}
             >
               {item.label}
-            </button>
+            </Button>
           ))}
         </nav>
       </aside>
@@ -210,6 +242,30 @@ function DashboardPage() {
           </QueryState>
         </Panel>
       </section>
+
+      <section className="content-grid two-column">
+        <Panel title="Alert severity mix" eyebrow="Severity distribution">
+          <QueryState
+            isLoading={alertsQuery.isLoading}
+            error={alertsQuery.error}
+            empty={!alerts.length}
+            emptyText="No alerts available for severity charting."
+          >
+            <AlertSeverityChart alerts={alerts} />
+          </QueryState>
+        </Panel>
+
+        <Panel title="Simulation risk trend" eyebrow="Recent windows">
+          <QueryState
+            isLoading={simulationsQuery.isLoading}
+            error={simulationsQuery.error}
+            empty={!simulations.length}
+            emptyText="No simulations available for risk charting."
+          >
+            <SimulationRiskChart simulations={simulations} />
+          </QueryState>
+        </Panel>
+      </section>
     </>
   )
 }
@@ -260,30 +316,28 @@ function PredictPage() {
     <section className="content-grid two-column wide-left">
       <Panel title="Feature JSON" eyebrow="Request body">
         <form className="form-stack" onSubmit={submitPrediction}>
-          <textarea
+          <Textarea
             aria-label="Feature JSON"
             className="json-input"
             value={featureJson}
             onChange={(event) => setFeatureJson(event.target.value)}
             spellCheck={false}
           />
-          {activeError && <p className="error-text">{activeError}</p>}
+          {activeError && <Alert variant="error">{activeError}</Alert>}
           <div className="button-row">
-            <button
-              className="primary-button"
+            <Button
               disabled={predictMutation.isPending}
               type="submit"
             >
               {predictMutation.isPending ? 'Predicting...' : 'Run prediction'}
-            </button>
-            <button
-              className="secondary-button"
+            </Button>
+            <Button
               disabled={randomMutation.isPending}
-              type="button"
+              variant="secondary"
               onClick={runRandomPrediction}
             >
               {randomMutation.isPending ? 'Sampling...' : 'Random sample'}
-            </button>
+            </Button>
           </div>
         </form>
       </Panel>
@@ -328,7 +382,7 @@ function SimulationsPage() {
           <label className="field-label" htmlFor="window-size">
             Window size
           </label>
-          <input
+          <Input
             id="window-size"
             min="1"
             step="1"
@@ -336,14 +390,13 @@ function SimulationsPage() {
             value={windowSize}
             onChange={(event) => setWindowSize(event.target.value)}
           />
-          {activeError && <p className="error-text">{activeError}</p>}
-          <button
-            className="primary-button"
+          {activeError && <Alert variant="error">{activeError}</Alert>}
+          <Button
             disabled={simulationMutation.isPending}
             type="submit"
           >
             {simulationMutation.isPending ? 'Running...' : 'Run simulation'}
-          </button>
+          </Button>
         </form>
 
         {simulationMutation.data && (
@@ -360,7 +413,10 @@ function SimulationsPage() {
           empty={!simulations.length}
           emptyText="No simulations returned by the backend yet."
         >
-          <SimulationTable simulations={simulations} />
+          <div className="metrics-stack">
+            <SimulationRiskChart simulations={simulations} />
+            <SimulationTable simulations={simulations} />
+          </div>
         </QueryState>
       </Panel>
     </section>
@@ -385,11 +441,23 @@ function AlertsPage() {
   })
 
   return (
-    <Panel title="Recent alerts" eyebrow="Local filters">
+    <section className="content-grid">
+      <Panel title="Alert severity" eyebrow="Filtered distribution">
+        <QueryState
+          isLoading={alertsQuery.isLoading}
+          error={alertsQuery.error}
+          empty={!filteredAlerts.length}
+          emptyText="No alerts match the current filters."
+        >
+          <AlertSeverityChart alerts={filteredAlerts} />
+        </QueryState>
+      </Panel>
+
+      <Panel title="Recent alerts" eyebrow="Local filters">
       <div className="filter-row">
         <label>
           Severity
-          <select
+          <Select
             value={severityFilter}
             onChange={(event) => setSeverityFilter(event.target.value)}
           >
@@ -399,11 +467,11 @@ function AlertsPage() {
                 {severity}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <label>
           Prediction
-          <select
+          <Select
             value={predictionFilter}
             onChange={(event) => setPredictionFilter(event.target.value)}
           >
@@ -413,7 +481,7 @@ function AlertsPage() {
                 {prediction}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <span className="filter-count">
           {filteredAlerts.length} of {alerts.length}
@@ -428,7 +496,8 @@ function AlertsPage() {
       >
         <AlertTable alerts={filteredAlerts} />
       </QueryState>
-    </Panel>
+      </Panel>
+    </section>
   )
 }
 
@@ -455,7 +524,7 @@ function MetricsPage() {
           <label className="field-label" htmlFor="threshold">
             Threshold
           </label>
-          <input
+          <Input
             id="threshold"
             max="1"
             min="0"
@@ -465,14 +534,14 @@ function MetricsPage() {
             onChange={(event) => setThresholdInput(event.target.value)}
           />
           {thresholdValidation && (
-            <p className="error-text">{thresholdValidation}</p>
+            <Alert variant="error">{thresholdValidation}</Alert>
           )}
           {metricsQuery.error && (
-            <p className="error-text">{errorMessage(metricsQuery.error)}</p>
+            <Alert variant="error">{errorMessage(metricsQuery.error)}</Alert>
           )}
-          <button className="primary-button" type="submit">
+          <Button type="submit">
             Load metrics
-          </button>
+          </Button>
         </form>
       </Panel>
 
@@ -503,6 +572,11 @@ function MetricsPage() {
                 />
               </div>
               <ConfusionMatrix matrix={metrics.confusion_matrix} />
+              <ThresholdMetricsChart
+                precision={metrics.precision}
+                recall={metrics.recall}
+                f1Score={metrics.f1_score}
+              />
             </div>
           )}
         </QueryState>
@@ -561,9 +635,14 @@ function Panel({
 }) {
   return (
     <section className="page-panel">
-      <p className="eyebrow">{eyebrow}</p>
-      <h2>{title}</h2>
-      {children}
+      <div className="panel-header">
+        <span className="panel-accent" aria-hidden="true" />
+        <div>
+          <p className="eyebrow">{eyebrow}</p>
+          <h2>{title}</h2>
+        </div>
+      </div>
+      <div className="panel-body">{children}</div>
     </section>
   )
 }
@@ -582,11 +661,11 @@ function QueryState({
   children: ReactNode
 }) {
   if (isLoading) {
-    return <EmptyState text="Loading backend data..." />
+    return <LoadingState />
   }
 
   if (error) {
-    return <p className="error-text">{errorMessage(error)}</p>
+    return <Alert variant="error">{errorMessage(error)}</Alert>
   }
 
   if (empty) {
@@ -621,8 +700,22 @@ function PredictionDetails({
           <dd>{formatDate(result.timestamp)}</dd>
         </div>
       </dl>
+      <ExplanationText text={result.explanation_text} />
       <TopFeatures features={result.shap_top_features} />
     </div>
+  )
+}
+
+function ExplanationText({ text }: { text: string }) {
+  if (!text.trim()) {
+    return <EmptyState text="No SHAP explanation returned." />
+  }
+
+  return (
+    <section className="explanation-block">
+      <h3>Why this result</h3>
+      <p>{text}</p>
+    </section>
   )
 }
 
@@ -680,34 +773,34 @@ function AlertList({ alerts }: { alerts: AlertEntry[] }) {
 
 function AlertTable({ alerts }: { alerts: AlertEntry[] }) {
   return (
-    <div className="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Time</th>
-            <th>Prediction</th>
-            <th>Severity</th>
-            <th>Confidence</th>
-            <th>Anomaly</th>
-            <th>Top SHAP</th>
-          </tr>
-        </thead>
-        <tbody>
+    <TableWrap>
+      <Table>
+        <TableHead>
+          <TableRow>
+            <TableHeader>Time</TableHeader>
+            <TableHeader>Prediction</TableHeader>
+            <TableHeader>Severity</TableHeader>
+            <TableHeader>Confidence</TableHeader>
+            <TableHeader>Anomaly</TableHeader>
+            <TableHeader>Top SHAP</TableHeader>
+          </TableRow>
+        </TableHead>
+        <TableBody>
           {alerts.map((alert) => (
-            <tr key={`${alert.timestamp}-${alert.prediction}`}>
-              <td>{formatDate(alert.timestamp)}</td>
-              <td>{alert.prediction}</td>
-              <td>
+            <TableRow key={`${alert.timestamp}-${alert.prediction}`}>
+              <TableCell>{formatDate(alert.timestamp)}</TableCell>
+              <TableCell>{alert.prediction}</TableCell>
+              <TableCell>
                 <SeverityBadge severity={alert.severity} />
-              </td>
-              <td>{formatPercent(alert.confidence)}</td>
-              <td>{formatNumber(alert.anomaly_score)}</td>
-              <td>{formatTopFeature(alert.shap_top_features)}</td>
-            </tr>
+              </TableCell>
+              <TableCell>{formatPercent(alert.confidence)}</TableCell>
+              <TableCell>{formatNumber(alert.anomaly_score)}</TableCell>
+              <TableCell>{formatTopFeature(alert.shap_top_features)}</TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
-    </div>
+        </TableBody>
+      </Table>
+    </TableWrap>
   )
 }
 
@@ -717,36 +810,36 @@ function SimulationTable({
   simulations: SimulateResponse[]
 }) {
   return (
-    <div className="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Time</th>
-            <th>Window</th>
-            <th>Risk</th>
-            <th>Attacks</th>
-            <th>Anomalies</th>
-            <th>Severity</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
+    <TableWrap>
+      <Table>
+        <TableHead>
+          <TableRow>
+            <TableHeader>Time</TableHeader>
+            <TableHeader>Window</TableHeader>
+            <TableHeader>Risk</TableHeader>
+            <TableHeader>Attacks</TableHeader>
+            <TableHeader>Anomalies</TableHeader>
+            <TableHeader>Severity</TableHeader>
+            <TableHeader>Status</TableHeader>
+          </TableRow>
+        </TableHead>
+        <TableBody>
           {simulations.map((simulation) => (
-            <tr key={`${simulation.timestamp}-${simulation.window_size}`}>
-              <td>{formatDate(simulation.timestamp)}</td>
-              <td>{simulation.window_size}</td>
-              <td>{formatNumber(simulation.mean_risk_score)}</td>
-              <td>{simulation.attack_count}</td>
-              <td>{simulation.anomaly_count}</td>
-              <td>
+            <TableRow key={`${simulation.timestamp}-${simulation.window_size}`}>
+              <TableCell>{formatDate(simulation.timestamp)}</TableCell>
+              <TableCell>{simulation.window_size}</TableCell>
+              <TableCell>{formatNumber(simulation.mean_risk_score)}</TableCell>
+              <TableCell>{simulation.attack_count}</TableCell>
+              <TableCell>{simulation.anomaly_count}</TableCell>
+              <TableCell>
                 <SeverityBadge severity={simulation.severity} />
-              </td>
-              <td>{simulation.alert_triggered ? 'Alert' : 'Clear'}</td>
-            </tr>
+              </TableCell>
+              <TableCell>{simulation.alert_triggered ? 'Alert' : 'Clear'}</TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
-    </div>
+        </TableBody>
+      </Table>
+    </TableWrap>
   )
 }
 
@@ -758,12 +851,174 @@ function TopFeatures({ features }: { features: ShapFeature[] }) {
   return (
     <div className="feature-list">
       <h3>Top SHAP features</h3>
+      <ShapImpactChart features={features} />
       {features.map((feature) => (
         <div className="feature-row" key={feature.feature}>
           <span>{feature.feature}</span>
           <strong>{formatNumber(feature.impact)}</strong>
         </div>
       ))}
+    </div>
+  )
+}
+
+function ShapImpactChart({ features }: { features: ShapFeature[] }) {
+  const data = features
+    .map((feature) => ({
+      feature: feature.feature,
+      impact: feature.impact,
+      absoluteImpact: Math.abs(feature.impact),
+    }))
+    .sort((left, right) => right.absoluteImpact - left.absoluteImpact)
+
+  return (
+    <div className="chart-box tall-chart">
+      <ResponsiveContainer height="100%" width="100%">
+        <BarChart data={data} layout="vertical" margin={chartMargin}>
+          <CartesianGrid horizontal={false} stroke="#e4e7ec" />
+          <XAxis tickFormatter={formatCompactNumber} type="number" />
+          <YAxis
+            dataKey="feature"
+            tick={{ fontSize: 12 }}
+            type="category"
+            width={120}
+          />
+          <Tooltip formatter={(value) => formatTooltipNumber(value)} />
+          <Bar dataKey="impact" name="SHAP impact" radius={[0, 4, 4, 0]}>
+            {data.map((item) => (
+              <Cell
+                fill={item.impact >= 0 ? chartColors.teal : chartColors.red}
+                key={item.feature}
+              />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+function AlertSeverityChart({ alerts }: { alerts: AlertEntry[] }) {
+  const data = severityOrder
+    .map((severity) => ({
+      severity,
+      count: alerts.filter((alert) => alert.severity === severity).length,
+    }))
+    .filter((item) => item.count > 0)
+
+  const customSeverities = uniqueOptions(
+    alerts
+      .map((alert) => alert.severity)
+      .filter((severity) => !severityOrder.includes(severity)),
+  ).map((severity) => ({
+    severity,
+    count: alerts.filter((alert) => alert.severity === severity).length,
+  }))
+
+  return (
+    <div className="chart-box split-chart">
+      <ResponsiveContainer height="100%" width="100%">
+        <PieChart>
+          <Pie
+            data={[...data, ...customSeverities]}
+            dataKey="count"
+            innerRadius={48}
+            nameKey="severity"
+            outerRadius={78}
+            paddingAngle={2}
+          >
+            {[...data, ...customSeverities].map((item) => (
+              <Cell fill={severityColor(item.severity)} key={item.severity} />
+            ))}
+          </Pie>
+          <Tooltip formatter={(value) => `${value} alerts`} />
+          <Legend />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+function SimulationRiskChart({
+  simulations,
+}: {
+  simulations: SimulateResponse[]
+}) {
+  const data = [...simulations]
+    .reverse()
+    .slice(-12)
+    .map((simulation) => ({
+      time: shortDate(simulation.timestamp),
+      risk: simulation.mean_risk_score,
+      attacks: simulation.attack_count,
+      anomalies: simulation.anomaly_count,
+    }))
+
+  return (
+    <div className="chart-box">
+      <ResponsiveContainer height="100%" width="100%">
+        <LineChart data={data} margin={chartMargin}>
+          <CartesianGrid stroke="#e4e7ec" />
+          <XAxis dataKey="time" tick={{ fontSize: 12 }} />
+          <YAxis tickFormatter={formatCompactNumber} />
+          <Tooltip formatter={(value) => formatTooltipNumber(value)} />
+          <Legend />
+          <Line
+            dataKey="risk"
+            name="Mean risk"
+            stroke={chartColors.teal}
+            strokeWidth={2}
+            type="monotone"
+          />
+          <Line
+            dataKey="attacks"
+            name="Attacks"
+            stroke={chartColors.red}
+            strokeWidth={2}
+            type="monotone"
+          />
+          <Line
+            dataKey="anomalies"
+            name="Anomalies"
+            stroke={chartColors.amber}
+            strokeWidth={2}
+            type="monotone"
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+function ThresholdMetricsChart({
+  precision,
+  recall,
+  f1Score,
+}: {
+  precision: number
+  recall: number
+  f1Score: number
+}) {
+  const data = [
+    { metric: 'Precision', value: precision },
+    { metric: 'Recall', value: recall },
+    { metric: 'F1 score', value: f1Score },
+  ]
+
+  return (
+    <div className="chart-block">
+      <h3>Metric balance</h3>
+      <div className="chart-box compact-chart">
+        <ResponsiveContainer height="100%" width="100%">
+          <BarChart data={data} margin={chartMargin}>
+            <CartesianGrid vertical={false} stroke="#e4e7ec" />
+            <XAxis dataKey="metric" tick={{ fontSize: 12 }} />
+            <YAxis domain={[0, 1]} tickFormatter={formatPercentTick} />
+            <Tooltip formatter={(value) => formatTooltipPercent(value)} />
+            <Bar dataKey="value" fill={chartColors.teal} name="Score" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   )
 }
@@ -792,15 +1047,21 @@ function ConfusionMatrix({ matrix }: { matrix: number[][] }) {
 }
 
 function SeverityBadge({ severity }: { severity: Severity }) {
-  return (
-    <span className={`severity-badge severity-${severity.toLowerCase()}`}>
-      {severity}
-    </span>
-  )
+  return <Badge variant={severityVariant(severity)}>{severity}</Badge>
 }
 
 function EmptyState({ text }: { text: string }) {
-  return <p className="empty-state">{text}</p>
+  return <Alert>{text}</Alert>
+}
+
+function LoadingState() {
+  return (
+    <div className="loading-stack" aria-label="Loading backend data">
+      <Skeleton />
+      <Skeleton className="short" />
+      <Skeleton className="medium" />
+    </div>
+  )
 }
 
 function parseFeatureJson(featureJson: string): ParsedFeatures {
@@ -858,12 +1119,75 @@ function uniqueOptions(values: string[]) {
   return Array.from(new Set(values)).sort()
 }
 
+const chartColors = {
+  green: '#12b76a',
+  amber: '#f79009',
+  red: '#f04438',
+  teal: '#0f766e',
+  gray: '#667085',
+}
+
+const severityOrder = ['LOW', 'MEDIUM', 'HIGH', 'ANOMALY']
+const chartMargin = { top: 8, right: 20, bottom: 8, left: 8 }
+
+function severityColor(severity: string) {
+  const normalized = severity.toUpperCase()
+
+  if (normalized === 'LOW') {
+    return chartColors.green
+  }
+
+  if (normalized === 'MEDIUM') {
+    return chartColors.amber
+  }
+
+  if (normalized === 'HIGH' || normalized === 'ANOMALY') {
+    return chartColors.red
+  }
+
+  return chartColors.gray
+}
+
+function severityVariant(severity: string) {
+  const normalized = severity.toUpperCase()
+
+  if (normalized === 'LOW') {
+    return 'success'
+  }
+
+  if (normalized === 'MEDIUM') {
+    return 'warning'
+  }
+
+  if (normalized === 'HIGH' || normalized === 'ANOMALY') {
+    return 'danger'
+  }
+
+  return 'neutral'
+}
+
 function formatPercent(value: number) {
   return `${(value * 100).toFixed(1)}%`
 }
 
+function formatPercentTick(value: number) {
+  return `${Math.round(value * 100)}%`
+}
+
 function formatNumber(value: number) {
   return value.toFixed(3)
+}
+
+function formatCompactNumber(value: number) {
+  return Number.isInteger(value) ? value.toString() : value.toFixed(2)
+}
+
+function formatTooltipNumber(value: unknown) {
+  return typeof value === 'number' ? formatNumber(value) : String(value)
+}
+
+function formatTooltipPercent(value: unknown) {
+  return typeof value === 'number' ? formatPercent(value) : String(value)
 }
 
 function formatDate(value: string) {
@@ -874,6 +1198,19 @@ function formatDate(value: string) {
   }
 
   return date.toLocaleString()
+}
+
+function shortDate(value: string) {
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  return date.toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 function formatTopFeature(features: ShapFeature[]) {

@@ -2,9 +2,6 @@
 """
 Trains an Isolation Forest on benign-only traffic from CICIDS2017.
 
-Usage:
-    python train_anomaly.py
-
 Environment variables (all optional — safe defaults shown):
     ARGUS_MODEL_DIR   Directory to read scaler.pkl from and write iso_forest.pkl to.
                       Default: backend/model
@@ -14,14 +11,19 @@ Environment variables (all optional — safe defaults shown):
                          Default: 0.05
 """
 
-import logging
 import os
+os.environ.setdefault("OMP_NUM_THREADS", "2")  # Limit OpenMP threads to prevent resource contention
+
+import logging
 import sys
 
 import joblib
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import IsolationForest
+
+# Column name for labels in the dataset; used for filtering benign rows.
+_LABEL_COL: str = "Label"
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -37,6 +39,9 @@ DATA_FILE: str = os.environ.get(
     "ARGUS_DATA_FILE",
     "Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv",
 )
+
+DATA_DIR: str | None = os.environ.get("ARGUS_DATA_DIR", None)
+
 CONTAMINATION: float = float(os.environ.get("ARGUS_CONTAMINATION", "0.05"))
 
 SCALER_PATH: str = os.path.join(MODEL_DIR, "scaler.pkl")
@@ -98,6 +103,40 @@ def load_and_filter_benign(data_file: str, feature_names: list[str]) -> pd.DataF
 
     return benign_df[feature_names]
 
+def filter_benign_from_df(
+    df: pd.DataFrame,
+    feature_names: list[str],
+) -> pd.DataFrame:
+    """
+    Filter benign rows from an already-loaded and cleaned DataFrame.
+    Used by the multi-file path where load_multi_csv() has already
+    handled cleaning and concatenation.
+
+    Args:
+        df: Cleaned concatenated DataFrame with 'Label' column present.
+        feature_names: Feature columns to restrict output to.
+
+    Returns:
+        DataFrame of benign rows restricted to feature_names columns.
+    """
+    if _LABEL_COL not in df.columns:
+        log.error("'Label' column not found in provided DataFrame.")
+        sys.exit(1)
+
+    benign_df = df[df[_LABEL_COL].str.strip().str.upper() == "BENIGN"].copy()
+    log.info("Benign rows after filtering: %d (of %d total)", len(benign_df), len(df))
+
+    if len(benign_df) == 0:
+        log.error("No benign rows found — check Label column values.")
+        sys.exit(1)
+
+    missing = [f for f in feature_names if f not in benign_df.columns]
+    if missing:
+        log.error("Features missing from DataFrame: %s", missing)
+        sys.exit(1)
+
+    return benign_df[feature_names]
+
 
 def normalise_benign(
     X_benign: pd.DataFrame,
@@ -148,7 +187,7 @@ def train_isolation_forest(
         n_estimators=100,
         contamination=contamination,
         random_state=42,
-        n_jobs=-1,
+        n_jobs=2,
     )
     iso_forest.fit(X_scaled)
     log.info("Isolation Forest training complete.")
@@ -202,13 +241,23 @@ if __name__ == "__main__":
 
     # 1. Load feature list from ensemble training artefact
     if not os.path.exists(FEATURES_PATH):
-        log.error("rf_features.pkl not found at %s — run train_model.py first.", FEATURES_PATH)
+        log.error(
+            "rf_features.pkl not found at %s — run train_model.py first.",
+            FEATURES_PATH,
+        )
         sys.exit(1)
     feature_names: list[str] = joblib.load(FEATURES_PATH)
     log.info("Loaded %d features from: %s", len(feature_names), FEATURES_PATH)
 
-    # 2. Load, filter, restrict to feature set
-    X_benign = load_and_filter_benign(DATA_FILE, feature_names)
+    # 2. Load and filter to benign rows — multi-file or single-file
+    if DATA_DIR:
+        log.info("Multi-file mode — loading from directory: %s", DATA_DIR)
+        from backend.core.data import load_multi_csv
+        combined_df = load_multi_csv(DATA_DIR, feature_list_override=feature_names)
+        X_benign = filter_benign_from_df(combined_df, feature_names)
+    else:
+        log.info("Single-file mode — loading: %s", DATA_FILE)
+        X_benign = load_and_filter_benign(DATA_FILE, feature_names)
 
     # 3. Normalise using the ensemble's scaler — never refit
     X_scaled = normalise_benign(X_benign, SCALER_PATH, feature_names)

@@ -96,3 +96,7 @@ htmlcov/
 *.xlsx
 *.xls
 *.jsonl
+
+
+#planning docs
+docs
