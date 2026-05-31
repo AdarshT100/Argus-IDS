@@ -10,7 +10,9 @@ from typing import Deque
 
 import numpy as np
 import pandas as pd
+import math
 from fastapi import APIRouter, HTTPException
+
 
 from backend.api.schemas import (
     AlertEntry,
@@ -65,6 +67,7 @@ _explainer = None
 _X_test: pd.DataFrame | None = None
 _X_test_raw: pd.DataFrame | None = None
 _simulation_log: Deque[SimulateResponse] = deque(maxlen=50)
+_simulation_cursor: int = 0
 
 # _MODEL_DIR = os.getenv("MODEL_DIR", "backend/model")
 
@@ -249,6 +252,8 @@ async def threshold_metrics(threshold: float = 0.5) -> ThresholdMetricsResponse:
 
     if _y_test is None or _X_test is None:
         raise HTTPException(status_code=503, detail="Threshold tuning artifacts are not available.")
+    if not math.isfinite(threshold):
+        raise HTTPException(status_code=400, detail="threshold must be a finite number.")
     if threshold < 0.0 or threshold > 1.0:
         raise HTTPException(status_code=400, detail="threshold must be between 0.0 and 1.0")
 
@@ -279,6 +284,8 @@ async def threshold_metrics(threshold: float = 0.5) -> ThresholdMetricsResponse:
 @router.post("/simulate", response_model=SimulateResponse)
 async def simulate(request: SimulateRequest) -> SimulateResponse:
     """Simulate a sliding window and append the result to the simulation log."""
+    global _simulation_cursor
+
     try:
         _load_resources()
     except RuntimeError as exc:
@@ -290,7 +297,11 @@ async def simulate(request: SimulateRequest) -> SimulateResponse:
         X_test=_X_test,
         feature_names=_model_features,
         window_size=request.window_size,
+        start_index=_simulation_cursor,
     )
+
+    step_size = max(1, request.window_size // 2)
+    _simulation_cursor = (_simulation_cursor + step_size) % len(_X_test)
 
     entry = SimulateResponse(**result)
     _simulation_log.append(entry)

@@ -364,8 +364,12 @@ function SimulationsPage() {
     event.preventDefault()
     const parsedWindowSize = Number(windowSize)
 
-    if (!Number.isInteger(parsedWindowSize) || parsedWindowSize < 1) {
-      setValidationError('Window size must be a positive whole number.')
+    if (
+      !Number.isInteger(parsedWindowSize) ||
+      parsedWindowSize < 25 ||
+      parsedWindowSize > 100
+    ) {
+      setValidationError('Window size must be a whole number from 25 to 100.')
       return
     }
 
@@ -384,7 +388,8 @@ function SimulationsPage() {
           </label>
           <Input
             id="window-size"
-            min="1"
+            min="25"
+            max="100"
             step="1"
             type="number"
             value={windowSize}
@@ -957,11 +962,21 @@ function SimulationRiskChart({
   return (
     <div className="chart-box">
       <ResponsiveContainer height="100%" width="100%">
-        <LineChart data={data} margin={chartMargin}>
+        <LineChart data={data} margin={{ ...chartMargin, right: 34 }}>
           <CartesianGrid stroke="#e4e7ec" />
           <XAxis dataKey="time" tick={{ fontSize: 12 }} />
-          <YAxis tickFormatter={formatCompactNumber} />
-          <Tooltip formatter={(value) => formatTooltipNumber(value)} />
+          <YAxis
+            allowDecimals={false}
+            tickFormatter={formatCompactNumber}
+            yAxisId="count"
+          />
+          <YAxis
+            domain={[0, 1]}
+            orientation="right"
+            tickFormatter={formatPercentTick}
+            yAxisId="risk"
+          />
+          <Tooltip formatter={formatSimulationTooltip} />
           <Legend />
           <Line
             dataKey="risk"
@@ -969,6 +984,7 @@ function SimulationRiskChart({
             stroke={chartColors.teal}
             strokeWidth={2}
             type="monotone"
+            yAxisId="risk"
           />
           <Line
             dataKey="attacks"
@@ -976,6 +992,7 @@ function SimulationRiskChart({
             stroke={chartColors.red}
             strokeWidth={2}
             type="monotone"
+            yAxisId="count"
           />
           <Line
             dataKey="anomalies"
@@ -983,6 +1000,7 @@ function SimulationRiskChart({
             stroke={chartColors.amber}
             strokeWidth={2}
             type="monotone"
+            yAxisId="count"
           />
         </LineChart>
       </ResponsiveContainer>
@@ -1184,6 +1202,14 @@ function formatCompactNumber(value: number) {
 
 function formatTooltipNumber(value: unknown) {
   return typeof value === 'number' ? formatNumber(value) : String(value)
+}
+
+function formatSimulationTooltip(value: unknown, name: unknown) {
+  if (name === 'Mean risk' && typeof value === 'number') {
+    return formatPercent(value)
+  }
+
+  return formatTooltipNumber(value)
 }
 
 function formatTooltipPercent(value: unknown) {

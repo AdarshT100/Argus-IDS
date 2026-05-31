@@ -83,10 +83,11 @@ def simulate_window(
     X_test: pd.DataFrame,
     feature_names: list[str],
     window_size: int = 50,
+    start_index: int = 0,
     threshold: float = 0.6,
 ) -> dict:
     """
-    Simulate a sliding window of `window_size` packets.
+    Simulate a sequential sliding window of `window_size` packets.
 
     Changes from prototype:
     - Uses calibrated ensemble instead of RF only
@@ -97,8 +98,22 @@ def simulate_window(
 
     Returns a dict matching the alert log schema used by the frontend.
     """
-    indices = np.random.choice(len(X_test), window_size, replace=False)
-    X_window = X_test.iloc[indices][feature_names]
+    if window_size > len(X_test):
+        raise ValueError("window_size cannot exceed the available test rows.")
+
+    normalized_start = start_index % len(X_test)
+    end_index = normalized_start + window_size
+    if end_index <= len(X_test):
+        X_window = X_test.iloc[normalized_start:end_index][feature_names]
+    else:
+        overflow = end_index - len(X_test)
+        X_window = pd.concat(
+            [
+                X_test.iloc[normalized_start:][feature_names],
+                X_test.iloc[:overflow][feature_names],
+            ],
+            ignore_index=True,
+        )
 
     probabilities: np.ndarray = ensemble.predict_proba(X_window)[:, 1]
     mean_risk = float(np.mean(probabilities))

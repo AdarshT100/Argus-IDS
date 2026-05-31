@@ -89,6 +89,8 @@ class SimulateRequest(BaseModel):
 
     window_size: int = Field(
         50,
+        ge=25,
+        le=100,
         description="Number of packets to simulate in the sliding window.",
         example=50,
     )
