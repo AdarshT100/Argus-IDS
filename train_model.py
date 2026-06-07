@@ -516,6 +516,8 @@ def main() -> None:
 
     dataset_source: dict = {}
     cache_loaded = False
+    raw_train_count = 0
+    raw_test_count = 0
 
     if USE_CACHE and all(
         os.path.exists(path)
@@ -548,12 +550,14 @@ def main() -> None:
                 os.path.basename(CACHE_Y_TEST),
             ],
         }
+        raw_train_count = len(X_train)
+        raw_test_count = len(X_test)
         cache_loaded = True
     else:
         if DATA_DIR:
             print(f"[data] Multi-file mode — loading from directory: {DATA_DIR}")
             from backend.core.data import load_multi_csv
-            combined_df = load_multi_csv(DATA_DIR)
+            combined_df, per_file_stats = load_multi_csv(DATA_DIR)
 
             # Label-encode and split X / y from the concatenated DataFrame
             y = combined_df["Label"].apply(lambda v: 0 if v == "BENIGN" else 1)
@@ -563,9 +567,7 @@ def main() -> None:
                 "mode": "multi_csv",
                 "data_dir": DATA_DIR,
                 "data_file": None,
-                "loaded_files": sorted(
-                    f for f in os.listdir(DATA_DIR) if f.endswith(".csv")
-                ),
+                "loaded_files": per_file_stats,
             }
             print(
                 f"[data] Multi-file shape: {X.shape}  |  "
@@ -591,6 +593,8 @@ def main() -> None:
             pca,
             model_feature_names,
         ) = prepare_splits(X, y)
+        raw_train_count = len(X) - len(X_test)
+        raw_test_count = len(X_test)
 
         os.makedirs(MODEL_DIR, exist_ok=True)
         joblib.dump(X_train, CACHE_X_TRAIN)
@@ -638,8 +642,8 @@ def main() -> None:
         y_test,
         joblib.load(os.path.join(MODEL_DIR, "X_test_raw.pkl")),
         y_train_res,
-        len(X_train),
-        len(X_test),
+        raw_train_count,
+        raw_test_count,
         len(y_train_res),
         {
             "benign": int((y_train_res == 0).sum()),

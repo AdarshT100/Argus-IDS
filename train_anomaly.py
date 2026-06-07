@@ -253,7 +253,10 @@ if __name__ == "__main__":
     if DATA_DIR:
         log.info("Multi-file mode — loading from directory: %s", DATA_DIR)
         from backend.core.data import load_multi_csv
-        combined_df = load_multi_csv(DATA_DIR, feature_list_override=feature_names)
+        combined_df, _per_file_stats = load_multi_csv(
+            DATA_DIR,
+            feature_list_override=feature_names,
+        )
         X_benign = filter_benign_from_df(combined_df, feature_names)
     else:
         log.info("Single-file mode — loading: %s", DATA_FILE)

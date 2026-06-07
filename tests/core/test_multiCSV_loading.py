@@ -14,6 +14,12 @@ def _write_csv(path, data: dict) -> None:
     """Write a dict-of-lists as a CSV file to path."""
     pd.DataFrame(data).to_csv(path, index=False)
 
+
+def _load_df(path, feature_list_override: list[str] | None = None) -> pd.DataFrame:
+    """Return only the DataFrame from load_multi_csv for legacy assertions."""
+    df, _stats = load_multi_csv(str(path), feature_list_override=feature_list_override)
+    return df
+
 # ---------------------------------------------------------------------------
 # Test 1 — same schema across all files, correct concatenation
 # ---------------------------------------------------------------------------
@@ -34,7 +40,7 @@ def test_same_schema_concatenation(tmp_path):
             },
         )
 
-    result = load_multi_csv(str(tmp_path))
+    result = _load_df(tmp_path)
 
     assert len(result) == 30, f"Expected 30 rows, got {len(result)}"
     assert set(result.columns) == {"feat_a", "feat_b", "feat_c", "Label"}
@@ -67,7 +73,7 @@ def test_extra_columns_in_one_file_are_dropped(tmp_path):
         },
     )
 
-    result = load_multi_csv(str(tmp_path))
+    result = _load_df(tmp_path)
 
     assert set(result.columns) == {"feat_a", "feat_b", "Label"}, (
         f"Extra column should be dropped. Got: {set(result.columns)}"
@@ -125,7 +131,7 @@ def test_feature_list_override_respected(tmp_path):
             },
         )
 
-    result = load_multi_csv(str(tmp_path), feature_list_override=["feat_a", "feat_b"])
+    result = _load_df(tmp_path, feature_list_override=["feat_a", "feat_b"])
 
     assert set(result.columns) == {"feat_a", "feat_b", "Label"}, (
         f"feat_c should be excluded. Got: {set(result.columns)}"
@@ -171,9 +177,50 @@ def test_inf_and_nan_rows_are_dropped(tmp_path):
         },
     )
 
-    result = load_multi_csv(str(tmp_path))
+    result = _load_df(tmp_path)
 
     # Rows at index 1 (inf), 2 (-inf), 3 (NaN) should be dropped → 2 rows remain
     assert len(result) == 2, f"Expected 2 clean rows, got {len(result)}"
     assert not result[["feat_a", "feat_b"]].isin([np.inf, -np.inf]).any().any()
     assert not result[["feat_a", "feat_b"]].isna().any().any()
+
+
+# ---------------------------------------------------------------------------
+# Test 8 — per-file stats include benign and attack counts
+# ---------------------------------------------------------------------------
+
+def test_per_file_stats_include_class_breakdown(tmp_path):
+    """
+    load_multi_csv should return per-file stats for metadata.json.
+    """
+    _write_csv(
+        tmp_path / "file_a.csv",
+        {
+            "feat_a": [1.0, 2.0, 3.0],
+            "Label": ["BENIGN", "ATTACK", "BENIGN"],
+        },
+    )
+    _write_csv(
+        tmp_path / "file_b.csv",
+        {
+            "feat_a": [4.0, 5.0],
+            "Label": ["ATTACK", "ATTACK"],
+        },
+    )
+
+    _df, stats = load_multi_csv(str(tmp_path))
+
+    assert stats == [
+        {
+            "filename": "file_a.csv",
+            "total_rows": 3,
+            "benign": 2,
+            "attack": 1,
+        },
+        {
+            "filename": "file_b.csv",
+            "total_rows": 2,
+            "benign": 0,
+            "attack": 2,
+        },
+    ]
