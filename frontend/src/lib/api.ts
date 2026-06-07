@@ -5,6 +5,7 @@ import type {
   ExplainRequest,
   ExplainResponse,
   HealthResponse,
+  ModelMetadataResponse,
   PredictRandomResponse,
   PredictRequest,
   PredictResponse,
@@ -130,4 +131,6 @@ export const apiClient = {
     apiRequest<ThresholdMetricsResponse>('/model/threshold', {
       query: { threshold },
     }),
+
+  getModelMetadata: () => apiRequest<ModelMetadataResponse>('/model/metadata'),
 }

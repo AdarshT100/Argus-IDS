@@ -11,6 +11,7 @@ export const queryKeys = {
   health: ['health'] as const,
   alerts: ['alerts'] as const,
   simulations: ['simulations'] as const,
+  modelMetadata: ['modelMetadata'] as const,
   thresholdMetrics: (threshold: number) =>
     ['thresholdMetrics', threshold] as const,
 }
@@ -49,6 +50,13 @@ export function useThresholdMetricsQuery(threshold: number) {
   return useQuery({
     queryKey: queryKeys.thresholdMetrics(threshold),
     queryFn: () => apiClient.getThresholdMetrics(threshold),
+  })
+}
+
+export function useModelMetadataQuery() {
+  return useQuery({
+    queryKey: queryKeys.modelMetadata,
+    queryFn: apiClient.getModelMetadata,
   })
 }
 

@@ -82,6 +82,35 @@ export type ThresholdMetricsResponse = {
   tp: number
 }
 
+export type DatasetFileStats = {
+  filename: string
+  total_rows: number
+  benign: number
+  attack: number
+}
+
+export type ModelDatasetSource = {
+  mode?: string | null
+  data_dir?: string | null
+  data_file?: string | null
+  loaded_files?: DatasetFileStats[]
+}
+
+export type ModelMetadataResponse = {
+  trained_at: string | null
+  calibrated_accuracy: number | null
+  raw_accuracy: Record<string, number> | null
+  train_count: number | null
+  test_count: number | null
+  smote_train_count: number | null
+  smote_class_counts: Record<string, number> | null
+  feature_count: number | null
+  use_pca: boolean | null
+  dataset_source: ModelDatasetSource | null
+  calibration_status: string | null
+  hyperparameters: Record<string, unknown> | null
+}
+
 export type ApiErrorDetail =
   | string
   | Array<Record<string, unknown>>

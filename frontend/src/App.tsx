@@ -5,8 +5,8 @@ import { backendUrl } from './lib/config'
 import AlertsPage from './pages/Alerts'
 import DashboardPage from './pages/Dashboard'
 import MetricsPage from './pages/Metrics'
+import ModelOverviewPage from './pages/ModelOverview'
 import PredictPage from './pages/Predict'
-import SettingsPage from './pages/Settings'
 import SimulationsPage from './pages/Simulations'
 
 type PageKey =
@@ -15,7 +15,7 @@ type PageKey =
   | 'simulations'
   | 'alerts'
   | 'metrics'
-  | 'settings'
+  | 'model-overview'
 
 type Page = {
   key: PageKey
@@ -30,7 +30,7 @@ const pages: Page[] = [
   { key: 'simulations', label: 'Simulations', eyebrow: 'Window analysis', title: 'Sliding-window simulation' },
   { key: 'alerts', label: 'Alerts', eyebrow: 'Detection log', title: 'Recent alert review' },
   { key: 'metrics', label: 'Model Metrics', eyebrow: 'Threshold view', title: 'Threshold metrics' },
-  { key: 'settings', label: 'Settings', eyebrow: 'Configuration', title: 'Frontend runtime settings' },
+  { key: 'model-overview', label: 'Model Overview', eyebrow: 'Model profile', title: 'Training and evaluation overview' },
 ]
 
 const pageComponents: Record<PageKey, ReactNode> = {
@@ -39,7 +39,7 @@ const pageComponents: Record<PageKey, ReactNode> = {
   simulations: <SimulationsPage />,
   alerts: <AlertsPage />,
   metrics: <MetricsPage />,
-  settings: <SettingsPage />,
+  'model-overview': <ModelOverviewPage />,
 }
 
 function App() {
