@@ -5,6 +5,7 @@
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from backend.api.routes import router
 
 app = FastAPI(
@@ -24,6 +25,12 @@ app.add_middleware(
     allow_origins=ALLOWED_ORIGINS,
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
+)
+
+app.mount(
+    "/model-plots",
+    StaticFiles(directory=os.environ.get("ARGUS_MODEL_DIR", "backend/model")),
+    name="model-plots",
 )
 
 app.include_router(router)

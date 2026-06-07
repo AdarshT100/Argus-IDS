@@ -37,7 +37,7 @@ def load_dataset(filepath: str) -> pd.DataFrame:
 def load_multi_csv(
     directory: str,
     feature_list_override: list[str] | None = None,
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, list[dict[str, int | str]]]:
     """
     Load and concatenate all .csv files from `directory` in sorted order.
     Args:
@@ -48,10 +48,12 @@ def load_multi_csv(
             match a previously saved rf_features.pkl.
 
     Returns:
-        Concatenated DataFrame. Columns: common feature set + 'Label'.
-        Column names are stripped. Inf/NaN rows are dropped.
-        Metadata columns (Flow ID, Source IP, Destination IP, Timestamp)
-        are removed. Index is reset.
+        Tuple of:
+        - Concatenated DataFrame. Columns: common feature set + 'Label'.
+          Column names are stripped. Inf/NaN rows are dropped. Metadata
+          columns (Flow ID, Source IP, Destination IP, Timestamp) are removed.
+          Index is reset.
+        - Per-file stats with filename, total_rows, benign, and attack counts.
 
     Raises:
         FileNotFoundError: If `directory` contains no .csv files.
@@ -69,6 +71,7 @@ def load_multi_csv(
 
     per_file_frames: list[pd.DataFrame] = []
     per_file_row_counts: dict[str, int] = {}
+    per_file_stats: list[dict[str, int | str]] = []
     per_file_col_sets: list[set[str]] = []
 
     for path in csv_paths:
@@ -117,6 +120,14 @@ def load_multi_csv(
 
         benign = (df[_LABEL_COL].str.strip().str.upper() == "BENIGN").sum()
         attack = row_count - benign
+        per_file_stats.append(
+            {
+                "filename": fname,
+                "total_rows": int(row_count),
+                "benign": int(benign),
+                "attack": int(attack),
+            }
+        )
         print(f"{row_count:,} rows  (benign={benign:,}  attack={attack:,})")
 
     # Resolve common feature schema
@@ -154,7 +165,7 @@ def load_multi_csv(
         print(f"[multi_csv]     {fname}: {count:,} rows")
     print("[multi_csv] ────────────────────────────────────────────────────────")
 
-    return combined
+    return combined, per_file_stats
 
 
 def split_dataset(

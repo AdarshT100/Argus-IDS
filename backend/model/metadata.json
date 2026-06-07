@@ -1,9 +1,9 @@
 {
-  "trained_at": "2026-05-30T18:48:23.895888+00:00",
+  "trained_at": "2026-06-01T06:26:12.825537+00:00",
   "ARGUS_USE_PCA": false,
   "ARGUS_PCA_COMPONENTS": 30,
   "ARGUS_CONTAMINATION": null,
-  "train_count": 890490,
+  "train_count": 1838716,
   "test_count": 459679,
   "smote_train_count": 890490,
   "smote_class_counts": {
@@ -118,13 +118,48 @@
     "data_dir": "Dataset",
     "data_file": null,
     "loaded_files": [
-      "Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv",
-      "Friday-WorkingHours-Afternoon-PortScan.pcap_ISCX.csv",
-      "Friday-WorkingHours-Morning.pcap_ISCX.csv",
-      "Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv",
-      "Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv",
-      "Tuesday-WorkingHours.pcap_ISCX.csv",
-      "Wednesday-workingHours.pcap_ISCX.csv"
+      {
+        "filename": "Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv",
+        "total_rows": 225711,
+        "benign": 97686,
+        "attack": 128025
+      },
+      {
+        "filename": "Friday-WorkingHours-Afternoon-PortScan.pcap_ISCX.csv",
+        "total_rows": 286096,
+        "benign": 127292,
+        "attack": 158804
+      },
+      {
+        "filename": "Friday-WorkingHours-Morning.pcap_ISCX.csv",
+        "total_rows": 190911,
+        "benign": 188955,
+        "attack": 1956
+      },
+      {
+        "filename": "Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv",
+        "total_rows": 288395,
+        "benign": 288359,
+        "attack": 36
+      },
+      {
+        "filename": "Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv",
+        "total_rows": 170231,
+        "benign": 168051,
+        "attack": 2180
+      },
+      {
+        "filename": "Tuesday-WorkingHours.pcap_ISCX.csv",
+        "total_rows": 445645,
+        "benign": 431813,
+        "attack": 13832
+      },
+      {
+        "filename": "Wednesday-workingHours.pcap_ISCX.csv",
+        "total_rows": 691406,
+        "benign": 439683,
+        "attack": 251723
+      }
     ]
   }
 }

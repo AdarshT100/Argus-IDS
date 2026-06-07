@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from collections import deque
 from datetime import datetime, timezone
+import json
+import os
 from typing import Deque
 
 import numpy as np
@@ -50,6 +52,10 @@ from backend.services.SHAP_explainer import (
 )
 
 router = APIRouter()
+METADATA_PATH = os.path.join(
+    os.environ.get("ARGUS_MODEL_DIR", "backend/model"),
+    "metadata.json",
+)
 
 # ── In-memory alert log — capped at 50 per §4 ──────────────────────────────
 _alert_log: Deque[AlertEntry] = deque(maxlen=50)
@@ -133,6 +139,34 @@ def _build_packet(request_features: dict[str, float]) -> pd.Series:
 async def health() -> dict:
     """Health check — used by Streamlit to verify the API is awake (§9.1)."""
     return {"status": "ok"}
+
+
+@router.get("/model/metadata")
+def get_model_metadata() -> dict:
+    """Return the metadata fields required by the model overview page."""
+    if not os.path.exists(METADATA_PATH):
+        raise HTTPException(
+            status_code=404,
+            detail="metadata.json not found. Run train_model.py first.",
+        )
+
+    with open(METADATA_PATH, "r", encoding="utf-8") as metadata_file:
+        meta = json.load(metadata_file)
+
+    return {
+        "trained_at": meta.get("trained_at"),
+        "calibrated_accuracy": meta.get("calibrated_accuracy"),
+        "raw_accuracy": meta.get("raw_accuracy"),
+        "train_count": meta.get("train_count"),
+        "test_count": meta.get("test_count"),
+        "smote_train_count": meta.get("smote_train_count"),
+        "smote_class_counts": meta.get("smote_class_counts"),
+        "feature_count": len(meta.get("model_feature_names", [])),
+        "use_pca": meta.get("ARGUS_USE_PCA"),
+        "dataset_source": meta.get("dataset_source"),
+        "calibration_status": meta.get("calibration_status"),
+        "hyperparameters": meta.get("hyperparameters"),
+    }
 
 
 @router.post("/predict", response_model=PredictResponse)
