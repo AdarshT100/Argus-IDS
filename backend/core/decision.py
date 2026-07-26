@@ -1,6 +1,6 @@
 # filename: backend/core/decision.py
 # purpose: Decision engine — combines ensemble output + anomaly score into severity
-# governed by: §3.3 (decision engine logic — fixed, do not change)
+
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ def decide(
     ensemble_label: int,
     ensemble_confidence: float,
     iso_label: int,
-    iso_score: float,          # raw score_samples() output from Isolation Forest
+    iso_score: float,
 ) -> DecisionResult:
     """
     Args:

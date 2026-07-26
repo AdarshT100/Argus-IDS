@@ -1,6 +1,6 @@
 # filename: backend/core/simulation.py
 # purpose: Random packet selection and sliding window simulation for the frontend
-# governed by: §3.1, §3.2 (detection pipeline)
+
 
 from __future__ import annotations
 
@@ -30,8 +30,6 @@ def _scale_packet(
     return pd.DataFrame(scaled, columns=feature_names)
 
 
-# Note: predict_packet() is called both from API routes (real inference)
-# and simulation (test set packets).
 def get_random_packet(
     X_test: pd.DataFrame,
 ) -> tuple[pd.Series, int]:

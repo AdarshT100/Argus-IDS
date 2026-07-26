@@ -1,6 +1,6 @@
 # filename: backend/core/data.py
 # purpose: Dataset loading, preprocessing, SMOTE, PCA, train/test split
-# governed by: §5.1, §5.2 (preprocessing pipeline — fixed order)
+
 
 from __future__ import annotations
 
@@ -18,10 +18,7 @@ _MODEL_DIR: str = os.environ.get("ARGUS_MODEL_DIR", "backend/model")
 
 
 def load_dataset(filepath: str) -> pd.DataFrame:
-    """
-    Load a CICIDS2017-format CSV, strip column names, drop non-informative columns,
-    and handle infinite / NaN values. Steps 1–2 of §5.2.
-    """
+
     df = pd.read_csv(filepath)
     df.columns = df.columns.str.strip()
     df.replace([np.inf, -np.inf], np.nan, inplace=True)
@@ -50,9 +47,9 @@ def load_multi_csv(
     Returns:
         Tuple of:
         - Concatenated DataFrame. Columns: common feature set + 'Label'.
-          Column names are stripped. Inf/NaN rows are dropped. Metadata
-          columns (Flow ID, Source IP, Destination IP, Timestamp) are removed.
-          Index is reset.
+        Column names are stripped. Inf/NaN rows are dropped. Metadata
+        columns (Flow ID, Source IP, Destination IP, Timestamp) are removed.
+        Index is reset.
         - Per-file stats with filename, total_rows, benign, and attack counts.
 
     Raises:

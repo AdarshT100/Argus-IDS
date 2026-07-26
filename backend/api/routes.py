@@ -1,6 +1,6 @@
 # filename: backend/api/routes.py
 # purpose: /predict, /alerts, and /health endpoint definitions
-# governed by: §4 (API design), §3.2 (detection pipeline), §8 (alerting)
+
 
 from __future__ import annotations
 
@@ -57,7 +57,6 @@ METADATA_PATH = os.path.join(
     "metadata.json",
 )
 
-# ── In-memory alert log — capped at 50 per §4 ──────────────────────────────
 _alert_log: Deque[AlertEntry] = deque(maxlen=50)
 
 # ── Module-level singletons — loaded once on first predict call ─────────────
@@ -74,8 +73,6 @@ _X_test: pd.DataFrame | None = None
 _X_test_raw: pd.DataFrame | None = None
 _simulation_log: Deque[SimulateResponse] = deque(maxlen=50)
 _simulation_cursor: int = 0
-
-# _MODEL_DIR = os.getenv("MODEL_DIR", "backend/model")
 
 
 def _load_resources() -> None:
@@ -314,7 +311,6 @@ async def threshold_metrics(threshold: float = 0.5) -> ThresholdMetricsResponse:
     )
 
 
-# Added /simulate and /predict/random endpoints for §7 simulation and testing purposes.
 @router.post("/simulate", response_model=SimulateResponse)
 async def simulate(request: SimulateRequest) -> SimulateResponse:
     """Simulate a sliding window and append the result to the simulation log."""

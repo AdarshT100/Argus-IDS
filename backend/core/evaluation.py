@@ -1,8 +1,7 @@
 # filename: backend/core/evaluation.py
 # purpose: Model benchmarking utilities — confusion matrix, ROC, AUC,
 #          precision/recall/F1, calibration curve data
-# governed by: §3.1, §10 (charts: confusion matrix, ROC, precision-recall,
-#              calibration curve before/after)
+
 
 from __future__ import annotations
 

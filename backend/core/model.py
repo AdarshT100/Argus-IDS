@@ -1,7 +1,7 @@
 # filename: backend/core/model.py
 # purpose: Load model artifacts from backend/model/ — ensemble_model.pkl only at
 #          prediction time; rf/xgb are benchmarking artifacts (§6.1)
-# governed by: §6.1 (model save locations)
+
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import joblib
 import numpy as np
 import pandas as pd
 
-# All paths resolved from env var or default — no hardcoded absolute paths
+
 _MODEL_DIR: str = os.environ.get("ARGUS_MODEL_DIR", "backend/model")
 
 

@@ -1,12 +1,15 @@
 # filename: backend/api/main.py
 # purpose: FastAPI application entry point
-# governed by: §3.1, §4 (API design)
+
 
 import os
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from backend.api.routes import router
+
+load_dotenv()
 
 app = FastAPI(
     title="Argus-IDS",

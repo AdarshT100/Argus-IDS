@@ -1,17 +1,20 @@
 # filename: backend/services/alert_dispatcher.py
 # purpose: Discord webhook dispatcher — fires on HIGH and ANOMALY severities only
-# governed by: §8 (alerting decisions), §3.3 (trigger conditions)
+
 
 from __future__ import annotations
 
+import logging
 import os
 import requests
 
-# Webhook URL must be set as env var — never hardcoded (§8, no-hardcoded-paths rule)
+logger = logging.getLogger(__name__)
+
 _DISCORD_WEBHOOK_URL: str = os.environ.get("ARGUS_DISCORD_WEBHOOK_URL", "")
 
 # Severities that trigger an alert (§8, §3.3)
 _ALERT_SEVERITIES: frozenset[str] = frozenset({"HIGH", "ANOMALY"})
+_PLACEHOLDER_WEBHOOK_FRAGMENT: str = "your-webhook-url"
 
 
 def dispatch_alert(
@@ -35,13 +38,25 @@ def dispatch_alert(
         True if webhook was fired, False if skipped or failed.
     """
     if severity not in _ALERT_SEVERITIES:
+        logger.info("Skipping Discord alert for non-trigger severity: %s", severity)
         return False
 
     if not _DISCORD_WEBHOOK_URL:
-        return False  # silently skip if webhook not configured
+        logger.warning("Discord alert skipped because no webhook URL is configured")
+        return False
+
+    if _PLACEHOLDER_WEBHOOK_FRAGMENT in _DISCORD_WEBHOOK_URL:
+        logger.warning("Discord alert skipped because webhook URL still contains the placeholder")
+        return False
+
+    safe_features = []
+    for feature in shap_top_features[:3]:
+        feature_name = feature.get("feature", "unknown")
+        feature_impact = feature.get("impact", 0.0)
+        safe_features.append({"feature": str(feature_name), "impact": float(feature_impact)})
 
     features_text = "\n".join(
-        f"  • {f['feature']}: {f['impact']:.4f}" for f in shap_top_features[:3]
+        f"  • {feature['feature']}: {feature['impact']:.4f}" for feature in safe_features
     )
     payload = {
         "content": (
@@ -55,6 +70,16 @@ def dispatch_alert(
 
     try:
         resp = requests.post(_DISCORD_WEBHOOK_URL, json=payload, timeout=5)
-        return resp.status_code == 204
-    except requests.RequestException:
+        if resp.status_code == 204:
+            logger.info("Discord alert dispatched successfully for severity %s", severity)
+            return True
+
+        logger.warning(
+            "Discord alert failed with status %s for severity %s",
+            resp.status_code,
+            severity,
+        )
+        return False
+    except requests.RequestException as exc:
+        logger.exception("Discord alert request failed: %s", exc)
         return False

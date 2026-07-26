@@ -1,6 +1,6 @@
 # filename: backend/api/schemas.py
 # purpose: Pydantic request/response models for the FastAPI endpoints
-# governed by: §4 (request/response shapes), §11.1 (schema validation test requirement)
+
 
 from __future__ import annotations
 

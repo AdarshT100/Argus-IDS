@@ -1,6 +1,6 @@
 # filename: backend/services/shap_explainer.py
 # purpose: SHAP explainability — TreeExplainer wrapper, impact DataFrame, explanation text
-# governed by: §2.1 (SHAP, extend to cover ensemble), §3.1
+
 
 from __future__ import annotations
 
