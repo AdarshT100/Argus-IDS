@@ -82,7 +82,9 @@ _simulation_cursor: int = 0
 
 def _load_resources() -> None:
     """Load all artefacts into singletons. No-op after first call."""
-    global _ensemble, _iso_forest, _scaler, _features, _model_features, _pca, _metadata, _y_test, _explainer, _X_test, _X_test_raw, _multiclass, _label_map
+    global _ensemble, _iso_forest, _scaler, _features, _model_features, \
+        _pca, _metadata, _y_test, _explainer, _X_test, _X_test_raw, \
+        _multiclass, _label_map
 
     if _ensemble is not None and _explainer is not None:
         return
@@ -137,7 +139,7 @@ def _build_packet(request_features: dict[str, float]) -> pd.Series:
     return pd.Series(scaled_array[0], index=_model_features)
 
 
-# ── Endpoints ────────────────────────────────────────────────────────────────
+# Endpoints
 
 @router.get("/health", status_code=200)
 async def health() -> dict:
