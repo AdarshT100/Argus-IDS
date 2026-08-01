@@ -24,3 +24,6 @@ requests==2.32.5
 # Linting / testing (dev)
 flake8>=7.0.0
 pytest>=8.0.0
+
+#server
+redis>=5.0.0
