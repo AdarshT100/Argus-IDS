@@ -34,6 +34,7 @@ def load_dataset(filepath: str) -> pd.DataFrame:
 def load_multi_csv(
     directory: str,
     feature_list_override: list[str] | None = None,
+    exclude_filenames: list[str] | None = None,
 ) -> tuple[pd.DataFrame, list[dict[str, int | str]]]:
     """
     Load and concatenate all .csv files from `directory` in sorted order.
@@ -63,6 +64,15 @@ def load_multi_csv(
     csv_paths = sorted(glob.glob(os.path.join(directory, "*.csv")))
     if not csv_paths:
         raise FileNotFoundError(f"No .csv files found in directory: {directory!r}")
+
+    # Optionally exclude specific filenames (case-insensitive)
+    if exclude_filenames:
+        exclude_set = {name.lower() for name in exclude_filenames}
+        csv_paths = [p for p in csv_paths if os.path.basename(p).lower() not in exclude_set]
+        if not csv_paths:
+            raise FileNotFoundError(
+                f"No .csv files found in directory after excluding {exclude_filenames!r}"
+            )
 
     print(f"[multi_csv] Found {len(csv_paths)} file(s) in {directory!r}")
 

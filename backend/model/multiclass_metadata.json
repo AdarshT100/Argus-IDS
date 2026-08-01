@@ -1,0 +1,132 @@
+{
+  "trained_at": "2026-08-01T11:30:37.970622+00:00",
+  "model_type": "multiclass",
+  "num_classes": 6,
+  "class_names": [
+    "BENIGN",
+    "DoS",
+    "PortScan",
+    "BruteForce",
+    "WebAttack",
+    "Infiltration"
+  ],
+  "label_map": {
+    "0": "BENIGN",
+    "1": "DoS",
+    "2": "PortScan",
+    "3": "BruteForce",
+    "4": "WebAttack",
+    "5": "Infiltration"
+  },
+  "train_count": 1838712,
+  "val_count": 459683,
+  "smote_train_count": 4038,
+  "smote_class_counts": {
+    "BENIGN": 673,
+    "DoS": 673,
+    "PortScan": 673,
+    "BruteForce": 673,
+    "WebAttack": 673,
+    "Infiltration": 673
+  },
+  "hyperparameters": {
+    "rf": {
+      "n_estimators": 100,
+      "random_state": 42,
+      "n_jobs": 2
+    },
+    "xgb": {
+      "n_estimators": 100,
+      "random_state": 42,
+      "n_jobs": 2,
+      "objective": "multi:softprob",
+      "num_class": 6,
+      "eval_metric": "mlogloss"
+    },
+    "ensemble": {
+      "voting": "soft"
+    },
+    "calibration": {
+      "method": "isotonic",
+      "cv": 5
+    }
+  },
+  "raw_accuracy": {
+    "random_forest": 0.9552430696806278,
+    "xgboost": 0.9711692622959736,
+    "ensemble": 0.9674297287478545
+  },
+  "calibrated_accuracy": 0.9588716572072493,
+  "calibration_status": "isotonic applied",
+  "cv_scores": {
+    "mean": 0.9621057087121352,
+    "std": 0.016827779151714836,
+    "folds": [
+      0.9678217821782178,
+      0.9665841584158416,
+      0.969059405940594,
+      0.9776951672862454,
+      0.929368029739777
+    ]
+  },
+  "feature_count": 78,
+  "scaler_source": "scaler.pkl (binary training \u2014 loaded read-only, never refit)",
+  "dataset_source": {
+    "mode": "phase_2_multiclass_train_files",
+    "data_dir": "./Dataset",
+    "train_files": [
+      "Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv",
+      "Friday-WorkingHours-Afternoon-PortScan.pcap_ISCX.csv",
+      "Friday-WorkingHours-Morning.pcap_ISCX.csv",
+      "Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv",
+      "Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv",
+      "Tuesday-WorkingHours.pcap_ISCX.csv",
+      "Wednesday-workingHours.pcap_ISCX.csv"
+    ],
+    "internal_validation_fraction": 0.2,
+    "loaded_files": [
+      {
+        "filename": "Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv",
+        "total_rows": 225711,
+        "benign": 97686,
+        "attack": 128025
+      },
+      {
+        "filename": "Friday-WorkingHours-Afternoon-PortScan.pcap_ISCX.csv",
+        "total_rows": 286096,
+        "benign": 127292,
+        "attack": 158804
+      },
+      {
+        "filename": "Friday-WorkingHours-Morning.pcap_ISCX.csv",
+        "total_rows": 190911,
+        "benign": 188955,
+        "attack": 1956
+      },
+      {
+        "filename": "Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv",
+        "total_rows": 288395,
+        "benign": 288359,
+        "attack": 36
+      },
+      {
+        "filename": "Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv",
+        "total_rows": 170231,
+        "benign": 168051,
+        "attack": 2180
+      },
+      {
+        "filename": "Tuesday-WorkingHours.pcap_ISCX.csv",
+        "total_rows": 445645,
+        "benign": 431813,
+        "attack": 13832
+      },
+      {
+        "filename": "Wednesday-workingHours.pcap_ISCX.csv",
+        "total_rows": 691406,
+        "benign": 439683,
+        "attack": 251723
+      }
+    ]
+  }
+}

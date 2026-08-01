@@ -1,0 +1,207 @@
+{
+  "evaluated_at": "2026-08-01T10:08:29.192332+00:00",
+  "held_out_path": "Dataset/held_out_eval.csv",
+  "model_dir": "backend/model",
+  "row_count": 30709,
+  "feature_schema": {
+    "raw_feature_count": 78,
+    "model_feature_count": 78,
+    "pca_enabled": false
+  },
+  "class_counts": {
+    "BENIGN": 10000,
+    "BruteForce": 5000,
+    "DDoS": 5000,
+    "DoS": 5000,
+    "Infiltration": 36,
+    "PortScan": 5000,
+    "WebAttack": 673
+  },
+  "binary_class_counts": {
+    "BENIGN": 10000,
+    "ATTACK": 20709
+  },
+  "accuracy": 0.7721514865348921,
+  "macro_f1": 0.768747078710982,
+  "classification_report": {
+    "BENIGN": {
+      "precision": 0.5884119413531178,
+      "recall": 0.9993,
+      "f1-score": 0.7406885816995886,
+      "support": 10000.0
+    },
+    "ATTACK": {
+      "precision": 0.9994900189421536,
+      "recall": 0.6624655946689845,
+      "f1-score": 0.7968055757223755,
+      "support": 20709.0
+    },
+    "accuracy": 0.7721514865348921,
+    "macro avg": {
+      "precision": 0.7939509801476357,
+      "recall": 0.8308827973344922,
+      "f1-score": 0.768747078710982,
+      "support": 30709.0
+    },
+    "weighted avg": {
+      "precision": 0.8656276080564081,
+      "recall": 0.7721514865348921,
+      "f1-score": 0.7785317817131968,
+      "support": 30709.0
+    }
+  },
+  "bootstrap_ci": {
+    "iterations": 1000,
+    "random_state": 42,
+    "accuracy": {
+      "lower": 0.7671041062880589,
+      "upper": 0.7768105441401544
+    },
+    "macro_f1": {
+      "lower": 0.7636784558030504,
+      "upper": 0.7735634249121954
+    },
+    "per_class": {
+      "BENIGN": {
+        "precision": {
+          "lower": 0.5812411728795445,
+          "upper": 0.5959549493657166
+        },
+        "recall": {
+          "lower": 0.998705401673454,
+          "upper": 0.9997037336960245
+        },
+        "f1-score": {
+          "lower": 0.7350104838531848,
+          "upper": 0.7466540291192892
+        }
+      },
+      "ATTACK": {
+        "precision": {
+          "lower": 0.9990649950735172,
+          "upper": 0.9997841742141385
+        },
+        "recall": {
+          "lower": 0.6552530231315025,
+          "upper": 0.6694528018663587
+        },
+        "f1-score": {
+          "lower": 0.7915755436943234,
+          "upper": 0.8017954739807681
+        }
+      }
+    }
+  },
+  "low_confidence_predictions": {
+    "threshold": 0.6,
+    "count": 928,
+    "rate": 0.030219153993943145,
+    "by_true_label": {
+      "BENIGN": 2,
+      "ATTACK": 926
+    }
+  },
+  "isolation_forest": {
+    "count": 4387,
+    "total": 30709,
+    "rate": 0.14285714285714285,
+    "by_true_label": {
+      "BENIGN": 495,
+      "ATTACK": 3892
+    },
+    "by_eval_class": {
+      "BENIGN": {
+        "count": 495,
+        "total": 10000,
+        "rate": 0.0495
+      },
+      "BruteForce": {
+        "count": 0,
+        "total": 5000,
+        "rate": 0.0
+      },
+      "DDoS": {
+        "count": 858,
+        "total": 5000,
+        "rate": 0.1716
+      },
+      "DoS": {
+        "count": 2984,
+        "total": 5000,
+        "rate": 0.5968
+      },
+      "Infiltration": {
+        "count": 29,
+        "total": 36,
+        "rate": 0.8055555555555556
+      },
+      "PortScan": {
+        "count": 5,
+        "total": 5000,
+        "rate": 0.001
+      },
+      "WebAttack": {
+        "count": 16,
+        "total": 673,
+        "rate": 0.0237741456166419
+      }
+    },
+    "score_summary": {
+      "min": -0.7558862912363975,
+      "mean": -0.4121650316427611,
+      "median": -0.3698585426680067,
+      "max": -0.31955344906967087
+    }
+  },
+  "detection_overlap": {
+    "confusion_counts": {
+      "true_positive": 13719,
+      "false_negative": 6990,
+      "false_positive": 7,
+      "true_negative": 9993
+    },
+    "false_negative_anomaly_overlap": {
+      "false_negatives": 6990,
+      "anomaly_flagged": 7,
+      "coverage": 0.0010014306151645207
+    },
+    "by_eval_class": {
+      "BENIGN": {
+        "false_negatives": 0,
+        "false_negatives_anomaly_flagged": 0,
+        "false_negative_anomaly_coverage": 0.0
+      },
+      "BruteForce": {
+        "false_negatives": 0,
+        "false_negatives_anomaly_flagged": 0,
+        "false_negative_anomaly_coverage": 0.0
+      },
+      "DDoS": {
+        "false_negatives": 1986,
+        "false_negatives_anomaly_flagged": 5,
+        "false_negative_anomaly_coverage": 0.0025176233635448137
+      },
+      "DoS": {
+        "false_negatives": 25,
+        "false_negatives_anomaly_flagged": 0,
+        "false_negative_anomaly_coverage": 0.0
+      },
+      "Infiltration": {
+        "false_negatives": 2,
+        "false_negatives_anomaly_flagged": 0,
+        "false_negative_anomaly_coverage": 0.0
+      },
+      "PortScan": {
+        "false_negatives": 4977,
+        "false_negatives_anomaly_flagged": 2,
+        "false_negative_anomaly_coverage": 0.0004018485031143259
+      },
+      "WebAttack": {
+        "false_negatives": 0,
+        "false_negatives_anomaly_flagged": 0,
+        "false_negative_anomaly_coverage": 0.0
+      }
+    }
+  },
+  "text_report": "              precision    recall  f1-score   support\n\n      BENIGN       0.59      1.00      0.74     10000\n      ATTACK       1.00      0.66      0.80     20709\n\n    accuracy                           0.77     30709\n   macro avg       0.79      0.83      0.77     30709\nweighted avg       0.87      0.77      0.78     30709\n"
+}

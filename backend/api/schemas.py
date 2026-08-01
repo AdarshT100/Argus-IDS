@@ -29,12 +29,27 @@ class PredictResponse(BaseModel):
     """POST /predict response body. Shape fixed by §4."""
 
     prediction: str          # "ATTACK" or "BENIGN"
+    attack_type: str | None = None
     severity: str            # "LOW" | "MEDIUM" | "HIGH" | "ANOMALY"
     anomaly_score: float
     confidence: float
     explanation_text: str
     shap_top_features: list[ShapFeature]
     timestamp: str           # ISO-8601 string
+
+
+class MulticlassPredictResponse(BaseModel):
+    """POST /predict/multiclass response body."""
+
+    prediction: str
+    attack_type: str | None
+    severity: str
+    confidence: float
+    multiclass_confidence: float
+    anomaly_score: float
+    explanation_text: str
+    shap_top_features: list[ShapFeature]
+    timestamp: str
 
 
 class ExplainRequest(PredictRequest):
@@ -111,7 +126,21 @@ class SimulateResponse(BaseModel):
 class PredictRandomResponse(PredictResponse):
     """POST /predict/random response body."""
 
+    attack_type: str | None = None
     raw_features: dict[str, float]
+
+
+class StreamEvent(BaseModel):
+    """Enriched event published to Redis streams and WebSocket clients."""
+
+    event_id: str
+    timestamp: str
+    prediction: str
+    attack_type: str | None
+    severity: str
+    confidence: float
+    anomaly_score: float
+    shap_top_features: list[ShapFeature]
 
 
 class SimulationsResponse(BaseModel):

@@ -77,6 +77,24 @@ def load_metadata() -> dict[str, object] | None:
         return json.load(metadata_file)
 
 
+def load_multiclass() -> object | None:
+    """Load the calibrated 6-class ensemble (multiclass_model.pkl).
+    Returns None if not present — binary-only pipeline remains functional."""
+    path = _model_path("multiclass_model.pkl")
+    return joblib.load(path) if os.path.exists(path) else None
+
+
+def load_label_map() -> dict[int, str] | None:
+    """Load multiclass_label_map.json. Keys are returned as int, not str.
+    Returns None if not present."""
+    path = _model_path("multiclass_label_map.json")
+    if not os.path.exists(path):
+        return None
+    with open(path, "r", encoding="utf-8") as label_map_file:
+        raw_label_map = json.load(label_map_file)
+    return {int(str(key)): str(value) for key, value in raw_label_map.items()}
+
+
 # Added load_X_test and load_X_test_raw to load saved X_test splits
 # for API routes and simulation (§7).
 

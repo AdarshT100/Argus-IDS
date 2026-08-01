@@ -1,0 +1,62 @@
+{
+  "created_at": "2026-08-01T06:45:51.090485+00:00",
+  "random_state": 42,
+  "total_rows": 30709,
+  "class_counts": {
+    "BENIGN": 10000,
+    "DoS": 5000,
+    "DDoS": 5000,
+    "PortScan": 5000,
+    "BruteForce": 5000,
+    "WebAttack": 673,
+    "Infiltration": 36
+  },
+  "source_files": {
+    "BENIGN": [
+      "Tuesday-WorkingHours.pcap_ISCX.csv",
+      "Wednesday-workingHours.pcap_ISCX.csv",
+      "Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv",
+      "Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv",
+      "Friday-WorkingHours-Morning.pcap_ISCX.csv",
+      "Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv",
+      "Friday-WorkingHours-Afternoon-PortScan.pcap_ISCX.csv"
+    ],
+    "DoS": [
+      "Wednesday-workingHours.pcap_ISCX.csv",
+      "Friday-WorkingHours-Morning.pcap_ISCX.csv"
+    ],
+    "DDoS": [
+      "Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv"
+    ],
+    "PortScan": [
+      "Friday-WorkingHours-Afternoon-PortScan.pcap_ISCX.csv"
+    ],
+    "BruteForce": [
+      "Tuesday-WorkingHours.pcap_ISCX.csv"
+    ],
+    "WebAttack": [
+      "Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv"
+    ],
+    "Infiltration": [
+      "Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv"
+    ]
+  },
+  "rows_available_before_sampling": {
+    "BENIGN": 1741839,
+    "DoS": 251712,
+    "DDoS": 128025,
+    "PortScan": 158804,
+    "BruteForce": 13832,
+    "WebAttack": 673,
+    "Infiltration": 36
+  },
+  "sampling_targets": {
+    "BENIGN": 10000,
+    "DoS": 5000,
+    "DDoS": 5000,
+    "PortScan": 5000,
+    "BruteForce": 5000,
+    "WebAttack": 2000,
+    "Infiltration": 2000
+  }
+}

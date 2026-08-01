@@ -40,7 +40,14 @@ DATA_FILE: str = os.environ.get(
     "Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv",
 )
 
-DATA_DIR: str | None = os.environ.get("ARGUS_DATA_DIR", None)
+# Prefer explicit env var, otherwise default to workspace 'Dataset' folder if present
+_env_data_dir = os.environ.get("ARGUS_DATA_DIR")
+if _env_data_dir:
+    DATA_DIR: str | None = _env_data_dir
+elif os.path.isdir("Dataset"):
+    DATA_DIR = "Dataset"
+else:
+    DATA_DIR = None
 
 CONTAMINATION: float = float(os.environ.get("ARGUS_CONTAMINATION", "0.05"))
 
@@ -253,11 +260,21 @@ if __name__ == "__main__":
     if DATA_DIR:
         log.info("Multi-file mode — loading from directory: %s", DATA_DIR)
         from backend.core.data import load_multi_csv
-        combined_df, _per_file_stats = load_multi_csv(
-            DATA_DIR,
-            feature_list_override=feature_names,
-        )
-        X_benign = filter_benign_from_df(combined_df, feature_names)
+        try:
+            # Exclude held_out_eval.csv from training — reserved for testing only
+            combined_df, _per_file_stats = load_multi_csv(
+                DATA_DIR,
+                feature_list_override=feature_names,
+                exclude_filenames=["held_out_eval.csv"],
+            )
+            X_benign = filter_benign_from_df(combined_df, feature_names)
+        except (FileNotFoundError, ValueError) as e:
+            log.warning(
+                "Multi-file loading failed (%s). Falling back to single-file: %s",
+                e,
+                DATA_FILE,
+            )
+            X_benign = load_and_filter_benign(DATA_FILE, feature_names)
     else:
         log.info("Single-file mode — loading: %s", DATA_FILE)
         X_benign = load_and_filter_benign(DATA_FILE, feature_names)

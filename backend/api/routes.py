@@ -21,6 +21,7 @@ from backend.api.schemas import (
     AlertsResponse,
     ExplainRequest,
     ExplainResponse,
+    MulticlassPredictResponse,
     PredictRandomResponse,
     PredictRequest,
     PredictResponse,
@@ -34,8 +35,10 @@ from backend.core.model import (
     load_features,
     load_ensemble,
     load_iso_forest,
-    load_model_features,
+    load_label_map,
     load_metadata,
+    load_model_features,
+    load_multiclass,
     load_pca,
     load_scaler,
     load_X_test,
@@ -71,13 +74,15 @@ _y_test: np.ndarray | None = None
 _explainer = None
 _X_test: pd.DataFrame | None = None
 _X_test_raw: pd.DataFrame | None = None
+_multiclass = None
+_label_map: dict[int, str] | None = None
 _simulation_log: Deque[SimulateResponse] = deque(maxlen=50)
 _simulation_cursor: int = 0
 
 
 def _load_resources() -> None:
     """Load all artefacts into singletons. No-op after first call."""
-    global _ensemble, _iso_forest, _scaler, _features, _model_features, _pca, _metadata, _y_test, _explainer, _X_test, _X_test_raw
+    global _ensemble, _iso_forest, _scaler, _features, _model_features, _pca, _metadata, _y_test, _explainer, _X_test, _X_test_raw, _multiclass, _label_map
 
     if _ensemble is not None and _explainer is not None:
         return
@@ -92,6 +97,8 @@ def _load_resources() -> None:
     _y_test = load_y_test()
     _X_test = load_X_test()
     _X_test_raw = load_X_test_raw()
+    _multiclass = load_multiclass()
+    _label_map = load_label_map()
 
     if any(
         x is None
@@ -230,6 +237,86 @@ async def predict(request: PredictRequest) -> PredictResponse:
         severity=entry.severity,
         anomaly_score=entry.anomaly_score,
         confidence=entry.confidence,
+        explanation_text=explanation_text,
+        shap_top_features=shap_features,
+        timestamp=timestamp,
+    )
+
+
+@router.post("/predict/multiclass", response_model=MulticlassPredictResponse)
+async def predict_multiclass(request: PredictRequest) -> MulticlassPredictResponse:
+    """Run the binary pipeline first, then classify attack type with the multiclass model."""
+    try:
+        _load_resources()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    if _multiclass is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Multiclass model not available. Run train_multiclass.py first.",
+        )
+
+    packet = _build_packet(request.features)
+
+    result = predict_packet(
+        packet=packet,
+        ensemble=_ensemble,
+        iso_forest=_iso_forest,
+        feature_names=_model_features,
+    )
+
+    packet_df = packet.to_frame().T
+    multiclass_proba = _multiclass.predict_proba(packet_df)[0]
+    multiclass_class_id = int(np.argmax(multiclass_proba))
+    attack_type = None
+    if result.prediction == "ATTACK" and _label_map is not None:
+        attack_type = _label_map.get(multiclass_class_id)
+
+    proba = _ensemble.predict_proba(packet_df)[0]
+    prediction_int = int(np.argmax(proba))
+    shap_vector, explanation_text = generate_shap_analysis(
+        explainer=_explainer,
+        packet_df=packet_df,
+        feature_names=_model_features,
+        prediction=prediction_int,
+    )
+
+    shap_dicts = get_top_shap_features(
+        feature_names=_model_features,
+        shap_vector=shap_vector,
+        top_n=5,
+    )
+    shap_features = [ShapFeature(**d) for d in shap_dicts]
+
+    timestamp = datetime.now(timezone.utc).isoformat()
+
+    if result.severity in ("HIGH", "ANOMALY"):
+        dispatch_alert(
+            severity=result.severity,
+            timestamp=timestamp,
+            confidence=result.confidence,
+            anomaly_score=result.anomaly_score,
+            shap_top_features=shap_dicts[:3],
+        )
+
+    entry = AlertEntry(
+        timestamp=timestamp,
+        prediction=result.prediction,
+        severity=result.severity,
+        confidence=round(result.confidence, 4),
+        anomaly_score=round(result.anomaly_score, 4),
+        shap_top_features=shap_features,
+    )
+    _alert_log.append(entry)
+
+    return MulticlassPredictResponse(
+        prediction=result.prediction,
+        attack_type=attack_type,
+        severity=result.severity,
+        confidence=round(result.confidence, 4),
+        multiclass_confidence=round(float(multiclass_proba[multiclass_class_id]), 4),
+        anomaly_score=round(result.anomaly_score, 4),
         explanation_text=explanation_text,
         shap_top_features=shap_features,
         timestamp=timestamp,

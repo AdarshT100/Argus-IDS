@@ -9,6 +9,7 @@ os.environ.setdefault("OMP_NUM_THREADS", "2")  # Limit OpenMP threads to prevent
 
 import json
 import sys
+import tempfile
 from datetime import datetime, timezone
 
 import joblib
@@ -31,15 +32,24 @@ from sklearn.metrics import (
     precision_recall_curve,
     roc_curve,
 )
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import cross_val_score
 from sklearn.preprocessing import MinMaxScaler
 from xgboost import XGBClassifier
+from backend.core.data import load_multi_csv
 
-DATA_FILE: str = os.environ.get(
-    "ARGUS_DATA_FILE",
-    "Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv",
-)
-DATA_DIR: str | None = os.environ.get("ARGUS_DATA_DIR", None)
+# ---------------------------------------------------------------------------
+# [CHANGED] Phase 1b trains from the designated temporal training files only.
+# Mixed held-out evaluation is performed later by evaluate_held_out.py.
+# ---------------------------------------------------------------------------
+DATA_DIR: str = os.environ.get("ARGUS_DATA_DIR", "./Dataset")
+
+TRAIN_FILES: list[str] = [
+    "Tuesday-WorkingHours.pcap_ISCX.csv",
+    "Wednesday-workingHours.pcap_ISCX.csv",
+    "Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv",
+    "Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv",
+    "Friday-WorkingHours-Morning.pcap_ISCX.csv",
+]
 
 MODEL_DIR: str = os.environ.get("ARGUS_MODEL_DIR", "backend/model")
 
@@ -54,8 +64,14 @@ COLS_TO_DROP: list[str] = ["Flow ID", "Source IP", "Destination IP", "Timestamp"
 USE_PCA: bool = os.environ.get("ARGUS_USE_PCA", "false").lower() == "true"
 PCA_COMPONENTS: int = int(os.environ.get("ARGUS_PCA_COMPONENTS", "30"))
 DRY_RUN: bool = os.environ.get("ARGUS_DRY_RUN", "false").lower() == "true"
+INTERNAL_VALIDATION_FRACTION: float = float(
+    os.environ.get("ARGUS_INTERNAL_VALIDATION_FRACTION", "0.2")
+)
 
-MIN_ACCURACY: float = 0.95  # §6.2 — flag if below this
+# Phase 1b's publication-quality accuracy is measured in Phase 1c on
+# Dataset/held_out_eval.csv. This gate applies only to the internal validation
+# slice retained for artefact compatibility and smoke-check plots.
+MIN_ACCURACY: float = 0.80
 
 
 # ---------------------------------------------------------------------------
@@ -83,12 +99,130 @@ def load_and_preprocess(filepath: str) -> tuple[pd.DataFrame, pd.Series]:
           f"Benign: {(y == 0).sum()}  Attack: {(y == 1).sum()}")
     return X, y
 
+
+def load_training_dataframe(
+    filenames: list[str],
+    data_dir: str,
+) -> tuple[pd.DataFrame, list[dict[str, int | str]]]:
+    """
+    Load only the Phase 1b training files via load_multi_csv().
+
+    load_multi_csv() accepts a directory, not a filename list. To keep
+    backend/core/data.py unchanged, create a temporary directory containing
+    symlinks to the selected training CSVs, then delegate all cleaning and
+    common-schema alignment to load_multi_csv().
+    """
+    for fname in filenames:
+        fpath = os.path.join(data_dir, fname)
+        if not os.path.exists(fpath):
+            raise FileNotFoundError(f"[data] Expected training file not found: {fpath}")
+
+    with tempfile.TemporaryDirectory(prefix="argus_train_files_") as temp_dir:
+        symlink_names: dict[str, str] = {}
+        for index, fname in enumerate(filenames):
+            source = os.path.abspath(os.path.join(data_dir, fname))
+            link_name = f"{index:02d}__{fname}"
+            target = os.path.join(temp_dir, link_name)
+            os.symlink(source, target)
+            symlink_names[link_name] = fname
+
+        combined_df, per_file_stats = load_multi_csv(temp_dir)
+
+    for stat in per_file_stats:
+        stat["filename"] = symlink_names.get(str(stat["filename"]), stat["filename"])
+
+    print(
+        f"[data] Phase 1b loaded {len(filenames)} training files only. "
+        "Dataset/held_out_eval.csv is reserved for Phase 1c evaluation."
+    )
+    return combined_df, per_file_stats
+
+
+def split_training_dataframe_by_file(
+    combined_df: pd.DataFrame,
+    per_file_stats: list[dict[str, int | str]],
+    train_fraction: float,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
+    """
+    Keep temporal order inside each Phase 1b training file. Early rows train the
+    model; later rows form an internal validation slice for compatibility
+    artefacts and plots. The mixed held-out CSV is never loaded here.
+    """
+    if not 0.0 < train_fraction < 1.0:
+        raise ValueError("Internal train fraction must be between 0 and 1.")
+
+    if "Label" not in combined_df.columns:
+        raise ValueError("Label column not found in combined training dataframe.")
+
+    X_train_parts: list[pd.DataFrame] = []
+    X_test_parts: list[pd.DataFrame] = []
+    y_train_parts: list[pd.Series] = []
+    y_test_parts: list[pd.Series] = []
+
+    cursor = 0
+    for stat in per_file_stats:
+        fname = str(stat["filename"])
+        row_count = int(stat["total_rows"])
+        file_df = combined_df.iloc[cursor:cursor + row_count].copy()
+        cursor += row_count
+
+        if file_df.empty:
+            raise ValueError(f"[data] No usable rows after cleaning for {fname}.")
+
+        split_idx = int(len(file_df) * train_fraction)
+        if split_idx <= 0 or split_idx >= len(file_df):
+            raise ValueError(
+                f"[data] Invalid internal validation split for {fname}: "
+                f"{split_idx}/{len(file_df)}"
+            )
+
+        y_file = file_df["Label"].apply(lambda v: 0 if str(v).strip().upper() == "BENIGN" else 1)
+        X_file = file_df.drop("Label", axis=1)
+
+        X_train_file = X_file.iloc[:split_idx].copy()
+        X_test_file = X_file.iloc[split_idx:].copy()
+        y_train_file = y_file.iloc[:split_idx].copy()
+        y_test_file = y_file.iloc[split_idx:].copy()
+
+        X_train_parts.append(X_train_file)
+        X_test_parts.append(X_test_file)
+        y_train_parts.append(y_train_file)
+        y_test_parts.append(y_test_file)
+
+        print(
+            f"[split:file] {fname}  train={len(X_train_file)} "
+            f"(benign={(y_train_file == 0).sum()} attack={(y_train_file == 1).sum()})  "
+            f"test={len(X_test_file)} "
+            f"(benign={(y_test_file == 0).sum()} attack={(y_test_file == 1).sum()})"
+        )
+
+    X_train = pd.concat(X_train_parts, ignore_index=True)
+    X_test = pd.concat(X_test_parts, ignore_index=True)
+    y_train = pd.concat(y_train_parts, ignore_index=True)
+    y_test = pd.concat(y_test_parts, ignore_index=True)
+
+    print(
+        f"[data] Phase 1b internal temporal validation split — "
+        f"{len(per_file_stats)} train files  |  "
+        f"Train: {X_train.shape}  Benign: {(y_train == 0).sum()}  "
+        f"Attack: {(y_train == 1).sum()}  |  "
+        f"Validation: {X_test.shape}  Benign: {(y_test == 0).sum()}  "
+        f"Attack: {(y_test == 1).sum()}"
+    )
+    return X_train, X_test, y_train, y_test
+
+
 # ---------------------------------------------------------------------------
-# Step 4–6: Split, normalise, SMOTE, optional PCA  (§5.1, §5.2)
+# Step 4–6: Normalise, SMOTE, optional PCA  (§5.1, §5.2)
+# [CHANGED] prepare_splits no longer performs train/test split internally.
+# It now receives pre-split X_train / X_test / y_train / y_test from the
+# temporal file-based split performed in main(). train_test_split() removed.
 # ---------------------------------------------------------------------------
 def prepare_splits(
-    X: pd.DataFrame,
-    y: pd.Series,
+    X_train: pd.DataFrame,
+    X_test: pd.DataFrame,
+    y_train: pd.Series,
+    y_test: pd.Series,
 ) -> tuple[
     pd.DataFrame,
     pd.DataFrame,
@@ -100,21 +234,33 @@ def prepare_splits(
     list[str],
 ]:
     """
-    80/20 stratified split → min-max normalise → SMOTE on train only
-    → optional PCA. Returns named DataFrames ready for model training.
+    Min-max normalise (fit on train only) → SMOTE on train only
+    → optional PCA. Returns DataFrames ready for model training.
     """
     os.makedirs(MODEL_DIR, exist_ok=True)
 
-    raw_feature_names: list[str] = X.columns.tolist()
+    raw_feature_names: list[str] = X_train.columns.tolist()
     model_feature_names: list[str] = raw_feature_names
 
-    # §5.1 — 80/20 stratified split
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y,
-        test_size=0.2,
-        random_state=42,
-        stratify=y,
-    )
+    missing_test_features = [
+        feature for feature in raw_feature_names if feature not in X_test.columns
+    ]
+    if missing_test_features:
+        raise ValueError(
+            "Test partition is missing training features: "
+            f"{missing_test_features}"
+        )
+
+    extra_test_features = [
+        feature for feature in X_test.columns if feature not in raw_feature_names
+    ]
+    if extra_test_features:
+        print(
+            "[schema] Dropping test-only columns not present in training schema: "
+            f"{extra_test_features}"
+        )
+        X_test = X_test[raw_feature_names]
+
     print(f"[split] Train: {len(X_train)}  Test: {len(X_test)}")
 
     X_test_raw = X_test.copy()
@@ -126,7 +272,7 @@ def prepare_splits(
     X_test_scaled = scaler.transform(X_test)
     print("[preprocess] Min-max normalisation applied.")
 
-    # §5.2 step 5 — Under-sample majority THEN SMOTE on training split only
+    # §5.2 step 5 — Under-sample majority THEN SMOTE on training partition only
     resample_pipeline = ImbPipeline(steps=[
         ("under", RandomUnderSampler(random_state=42)),
         ("smote", SMOTE(random_state=42)),
@@ -172,6 +318,7 @@ def prepare_splits(
         model_feature_names,
     )
 
+
 # ---------------------------------------------------------------------------
 # Model training — RF + XGBoost + soft-voting ensemble (§3.4, §6)
 # ---------------------------------------------------------------------------
@@ -181,7 +328,6 @@ def train_models(
 ) -> tuple[RandomForestClassifier, XGBClassifier, VotingClassifier]:
     """Train RF and XGBoost individually, then combine into soft-voting ensemble."""
 
-    # Random Forest — ported from prototype (§6)
     print("[train] Fitting RandomForestClassifier ...")
     rf = RandomForestClassifier(
         n_estimators=100,
@@ -191,9 +337,6 @@ def train_models(
     rf.fit(X_train, y_train)
     print("[train] RF done.")
 
-    # XGBoost — new (§6); eval_metric suppresses default warning
-    # FLAG: hyperparameters not specified in master reference — using
-    #       symmetric defaults to RF. Revisit if accuracy < 95%.
     print("[train] Fitting XGBClassifier ...")
     xgb = XGBClassifier(
         n_estimators=100,
@@ -205,13 +348,10 @@ def train_models(
     xgb.fit(X_train, y_train)
     print("[train] XGBoost done.")
 
-    # Soft-voting ensemble — argmax of averaged predict_proba (§3.4)
     ensemble = VotingClassifier(
         estimators=[("rf", rf), ("xgb", xgb)],
         voting="soft",
     )
-    # VotingClassifier must be re-fit; estimators already trained above
-    # so this is fast — it delegates to the fitted sub-estimators.
     ensemble.fit(X_train, y_train)
     print("[train] Soft-voting ensemble assembled.")
 
@@ -242,6 +382,44 @@ def calibrate_ensemble(
 
 
 # ---------------------------------------------------------------------------
+# [NEW] k-fold cross-validation reporting (§3.1, §12.1)
+# Runs stratified 5-fold CV on the uncalibrated VotingClassifier against
+# SMOTE-balanced training data. Results printed and returned for metadata.
+# ---------------------------------------------------------------------------
+def run_cross_validation(
+    ensemble: VotingClassifier,
+    X_train: pd.DataFrame,
+    y_train: np.ndarray,
+    cv: int = 5,
+) -> dict:
+    """
+    Stratified k-fold CV on uncalibrated ensemble, SMOTE-balanced train data.
+    Returns dict with mean, std, and per-fold scores for metadata.json.
+    """
+    print(f"[cv] Running stratified {cv}-fold cross-validation on uncalibrated ensemble ...")
+    scores = cross_val_score(
+        ensemble,
+        X_train,
+        y_train,
+        cv=cv,
+        scoring="accuracy",
+        n_jobs=2,
+    )
+    mean_score = float(scores.mean())
+    std_score = float(scores.std())
+    fold_scores = [float(s) for s in scores]
+
+    print(f"[cv] Fold scores: {[f'{s:.4%}' for s in fold_scores]}")
+    print(f"[cv] Mean accuracy: {mean_score:.4%}  ±  {std_score:.4%}")
+
+    return {
+        "mean": mean_score,
+        "std": std_score,
+        "folds": fold_scores,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Evaluation + accuracy gate (§6.2)
 # ---------------------------------------------------------------------------
 def evaluate_and_report(
@@ -254,12 +432,20 @@ def evaluate_and_report(
     y_pred = model.predict(X_test)
     acc = accuracy_score(y_test, y_pred)
     print(f"\n[eval] {label}")
-    print(classification_report(y_test, y_pred, target_names=["BENIGN", "ATTACK"]))
+    print(
+        classification_report(
+            y_test,
+            y_pred,
+            labels=[0, 1],
+            target_names=["BENIGN", "ATTACK"],
+            zero_division=0,
+        )
+    )
     print(f"[eval] Accuracy: {acc:.4%}")
 
     if acc < MIN_ACCURACY:
         print(
-            f"[WARN] Accuracy {acc:.4%} is BELOW the §6.2 minimum of "
+            f"[WARN] Accuracy {acc:.4%} is BELOW the §3.1 minimum of "
             f"{MIN_ACCURACY:.0%}. Revisit preprocessing before proceeding."
         )
     else:
@@ -270,6 +456,8 @@ def evaluate_and_report(
 
 # ---------------------------------------------------------------------------
 # Save artefacts (§6.1)
+# [CHANGED] cv_scores added to metadata.json under key "cv_scores" (§12.1).
+# dataset_source now records temporal split file lists.
 # ---------------------------------------------------------------------------
 def save_artefacts(
     calibrated_ensemble: CalibratedClassifierCV,
@@ -293,6 +481,7 @@ def save_artefacts(
     ensemble_raw_accuracy: float,
     calibrated_accuracy: float,
     dataset_source: dict,
+    cv_scores: dict,
 ) -> None:
     """
     Save all model artefacts to MODEL_DIR.
@@ -370,6 +559,7 @@ def save_artefacts(
         },
         "calibrated_accuracy": float(calibrated_accuracy),
         "calibration_status": "isotonic applied",
+        "cv_scores": cv_scores,
         "model_feature_names": model_feature_names,
         "dataset_source": dataset_source,
     }
@@ -381,8 +571,7 @@ def save_artefacts(
 
 
 # ---------------------------------------------------------------------------
-# Feature importance (ported from prototype — RF only, not available on
-# calibrated ensemble wrapper)
+# Feature importance (ported from prototype — RF only)
 # ---------------------------------------------------------------------------
 def print_feature_importance(
     rf: RandomForestClassifier,
@@ -467,26 +656,29 @@ def _save_training_plots(
 
 
 def main() -> None:
-    # ── Dataset loading — multi-file or single-file ──────────────────────────
-    CACHE_X_TRAIN = os.path.join(MODEL_DIR, "cache_X_train_smoted.pkl")
-    CACHE_X_TEST = os.path.join(MODEL_DIR, "cache_X_test_scaled.pkl")
-    CACHE_Y_TRAIN = os.path.join(MODEL_DIR, "cache_y_train.pkl")
-    CACHE_Y_TEST = os.path.join(MODEL_DIR, "cache_y_test.pkl")
+    # ── Cache paths ──────────────────────────────────────────────────────────
+    split_cache_prefix = "cache_phase1b_train_files"
+    CACHE_X_TRAIN = os.path.join(MODEL_DIR, f"{split_cache_prefix}_X_train_smoted.pkl")
+    CACHE_X_TEST = os.path.join(MODEL_DIR, f"{split_cache_prefix}_X_test_scaled.pkl")
+    CACHE_Y_TRAIN = os.path.join(MODEL_DIR, f"{split_cache_prefix}_y_train.pkl")
+    CACHE_Y_TEST = os.path.join(MODEL_DIR, f"{split_cache_prefix}_y_test.pkl")
     USE_CACHE: bool = os.environ.get("ARGUS_USE_CACHE", "false").lower() == "true"
 
-    if DRY_RUN and DATA_DIR:
-        csv_files = sorted(
-            f for f in os.listdir(DATA_DIR) if f.endswith(".csv")
-        )
-        if not csv_files:
-            raise FileNotFoundError(
-                f"No CSV files found in DATA_DIR={DATA_DIR} for dry run."
-            )
+    # ── Dry-run mode ─────────────────────────────────────────────────────────
+    # [CHANGED] Dry-run now uses the first TRAIN file rather than a directory
+    # scan, consistent with temporal split approach.
+    if DRY_RUN:
+        dry_file = os.path.join(DATA_DIR, TRAIN_FILES[0])
+        print(f"[dry-run] Validating schema on first train file: {dry_file}")
 
-        dry_file = os.path.join(DATA_DIR, csv_files[0])
-        print(f"[dry-run] Validating schema on first CSV: {dry_file}")
+        X_dry, y_dry = load_and_preprocess(dry_file)
 
-        X, y = load_and_preprocess(dry_file)
+        # Fabricate a minimal test partition from a slice so prepare_splits works
+        split_idx = int(len(X_dry) * 0.8)
+        X_dry_train = X_dry.iloc[:split_idx].copy()
+        X_dry_test = X_dry.iloc[split_idx:].copy()
+        y_dry_train = y_dry.iloc[:split_idx].copy()
+        y_dry_test = y_dry.iloc[split_idx:].copy()
 
         original_joblib_dump = joblib.dump
         joblib.dump = lambda *args, **kwargs: None
@@ -500,7 +692,7 @@ def main() -> None:
                 scaler,
                 pca,
                 model_feature_names,
-            ) = prepare_splits(X, y)
+            ) = prepare_splits(X_dry_train, X_dry_test, y_dry_train, y_dry_test)
         finally:
             joblib.dump = original_joblib_dump
 
@@ -554,34 +746,24 @@ def main() -> None:
         raw_test_count = len(X_test)
         cache_loaded = True
     else:
-        if DATA_DIR:
-            print(f"[data] Multi-file mode — loading from directory: {DATA_DIR}")
-            from backend.core.data import load_multi_csv
-            combined_df, per_file_stats = load_multi_csv(DATA_DIR)
+        train_fraction = 1.0 - INTERNAL_VALIDATION_FRACTION
+        print("[data] Phase 1b — loading designated temporal training files ...")
+        combined_df, per_file_stats = load_training_dataframe(TRAIN_FILES, DATA_DIR)
+        X_train_raw, X_test_raw_df, y_train_raw, y_test_raw = split_training_dataframe_by_file(
+            combined_df,
+            per_file_stats,
+            train_fraction,
+        )
 
-            # Label-encode and split X / y from the concatenated DataFrame
-            y = combined_df["Label"].apply(lambda v: 0 if v == "BENIGN" else 1)
-            X = combined_df.drop("Label", axis=1)
-
-            dataset_source = {
-                "mode": "multi_csv",
-                "data_dir": DATA_DIR,
-                "data_file": None,
-                "loaded_files": per_file_stats,
-            }
-            print(
-                f"[data] Multi-file shape: {X.shape}  |  "
-                f"Benign: {(y == 0).sum()}  Attack: {(y == 1).sum()}"
-            )
-        else:
-            print(f"[data] Single-file mode — loading: {DATA_FILE}")
-            X, y = load_and_preprocess(DATA_FILE)  # existing function, unchanged
-            dataset_source = {
-                "mode": "single_file",
-                "data_dir": None,
-                "data_file": DATA_FILE,
-                "loaded_files": [os.path.basename(DATA_FILE)],
-            }
+        dataset_source = {
+            "mode": "phase_1b_train_files_only",
+            "data_dir": DATA_DIR,
+            "train_files": TRAIN_FILES,
+            "held_out_eval_file": os.path.join(DATA_DIR, "held_out_eval.csv"),
+            "held_out_eval_usage": "reserved_for_phase_1c_not_loaded_by_training",
+            "internal_validation_fraction": INTERNAL_VALIDATION_FRACTION,
+            "loaded_files": per_file_stats,
+        }
 
         (
             X_train,
@@ -592,9 +774,10 @@ def main() -> None:
             scaler,
             pca,
             model_feature_names,
-        ) = prepare_splits(X, y)
-        raw_train_count = len(X) - len(X_test)
-        raw_test_count = len(X_test)
+        ) = prepare_splits(X_train_raw, X_test_raw_df, y_train_raw, y_test_raw)
+
+        raw_train_count = len(X_train_raw)
+        raw_test_count = len(X_test_raw_df)
 
         os.makedirs(MODEL_DIR, exist_ok=True)
         joblib.dump(X_train, CACHE_X_TRAIN)
@@ -611,6 +794,9 @@ def main() -> None:
             )
 
     rf, xgb, ensemble = train_models(X_train, y_train_res)
+
+    # [NEW] k-fold CV on uncalibrated ensemble before calibration (§3.1, §12.1)
+    cv_scores = run_cross_validation(ensemble, X_train, y_train_res, cv=5)
 
     rf_accuracy = evaluate_and_report("Random Forest (raw)", rf, X_test, y_test)
     xgb_accuracy = evaluate_and_report("XGBoost (raw)", xgb, X_test, y_test)
@@ -654,7 +840,8 @@ def main() -> None:
         xgb_accuracy,
         ensemble_raw_accuracy,
         calibrated_accuracy,
-        dataset_source,       
+        dataset_source,
+        cv_scores,
     )
 
     _save_training_plots(
@@ -668,7 +855,8 @@ def main() -> None:
     if not USE_PCA:
         print_feature_importance(rf, feature_names)
 
-    print("\n[done] train_model.py complete. Check accuracy gate above before proceeding.")
+    print("\n[done] train1_model.py Phase 1b complete. Check accuracy gate above before proceeding.")
+
 
 if __name__ == "__main__":
     main()

@@ -1,14 +1,14 @@
 {
-  "trained_at": "2026-06-01T06:26:12.825537+00:00",
+  "trained_at": "2026-08-01T07:29:28.648582+00:00",
   "ARGUS_USE_PCA": false,
   "ARGUS_PCA_COMPONENTS": 30,
   "ARGUS_CONTAMINATION": null,
-  "train_count": 1838716,
-  "test_count": 459679,
-  "smote_train_count": 890490,
+  "train_count": 1429268,
+  "test_count": 357320,
+  "smote_train_count": 521280,
   "smote_class_counts": {
-    "benign": 445245,
-    "attack": 445245
+    "benign": 260640,
+    "attack": 260640
   },
   "hyperparameters": {
     "rf": {
@@ -27,12 +27,23 @@
     }
   },
   "raw_accuracy": {
-    "random_forest": 0.998796986592818,
-    "xgboost": 0.9990493366022811,
-    "ensemble": 0.9990754417756739
+    "random_forest": 0.9934484495690138,
+    "xgboost": 0.9985643121011978,
+    "ensemble": 0.9983740064927796
   },
-  "calibrated_accuracy": 0.9990645646200936,
+  "calibrated_accuracy": 0.9972069853352737,
   "calibration_status": "isotonic applied",
+  "cv_scores": {
+    "mean": 0.9507155463474524,
+    "std": 0.08246579449359202,
+    "folds": [
+      0.7878587323511357,
+      0.9998753069367711,
+      0.9998081645181093,
+      0.999856123388582,
+      0.9661794045426643
+    ]
+  },
   "model_feature_names": [
     "ACK Flag Count",
     "Active Max",
@@ -114,40 +125,19 @@
     "min_seg_size_forward"
   ],
   "dataset_source": {
-    "mode": "multi_csv",
-    "data_dir": "Dataset",
-    "data_file": null,
+    "mode": "phase_1b_train_files_only",
+    "data_dir": "./Dataset",
+    "train_files": [
+      "Tuesday-WorkingHours.pcap_ISCX.csv",
+      "Wednesday-workingHours.pcap_ISCX.csv",
+      "Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv",
+      "Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv",
+      "Friday-WorkingHours-Morning.pcap_ISCX.csv"
+    ],
+    "held_out_eval_file": "./Dataset/held_out_eval.csv",
+    "held_out_eval_usage": "reserved_for_phase_1c_not_loaded_by_training",
+    "internal_validation_fraction": 0.2,
     "loaded_files": [
-      {
-        "filename": "Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv",
-        "total_rows": 225711,
-        "benign": 97686,
-        "attack": 128025
-      },
-      {
-        "filename": "Friday-WorkingHours-Afternoon-PortScan.pcap_ISCX.csv",
-        "total_rows": 286096,
-        "benign": 127292,
-        "attack": 158804
-      },
-      {
-        "filename": "Friday-WorkingHours-Morning.pcap_ISCX.csv",
-        "total_rows": 190911,
-        "benign": 188955,
-        "attack": 1956
-      },
-      {
-        "filename": "Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv",
-        "total_rows": 288395,
-        "benign": 288359,
-        "attack": 36
-      },
-      {
-        "filename": "Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv",
-        "total_rows": 170231,
-        "benign": 168051,
-        "attack": 2180
-      },
       {
         "filename": "Tuesday-WorkingHours.pcap_ISCX.csv",
         "total_rows": 445645,
@@ -159,6 +149,24 @@
         "total_rows": 691406,
         "benign": 439683,
         "attack": 251723
+      },
+      {
+        "filename": "Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv",
+        "total_rows": 170231,
+        "benign": 168051,
+        "attack": 2180
+      },
+      {
+        "filename": "Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv",
+        "total_rows": 288395,
+        "benign": 288359,
+        "attack": 36
+      },
+      {
+        "filename": "Friday-WorkingHours-Morning.pcap_ISCX.csv",
+        "total_rows": 190911,
+        "benign": 188955,
+        "attack": 1956
       }
     ]
   }
