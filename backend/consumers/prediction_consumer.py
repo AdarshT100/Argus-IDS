@@ -5,7 +5,6 @@ import logging
 import os
 import signal
 import sys
-import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -13,7 +12,7 @@ import numpy as np
 import pandas as pd
 from redis.exceptions import ResponseError
 
-from backend.core.decision import DecisionResult, decide
+from backend.core.decision import DecisionResult
 from backend.core.model import (
     load_ensemble,
     load_features,
@@ -105,7 +104,6 @@ def _predict_packet(
 
     packet_df = packet.to_frame().T
     proba = ensemble.predict_proba(packet_df)[0]
-    prediction_int = int(np.argmax(proba))
     return result, np.asarray(proba)
 
 
@@ -197,7 +195,6 @@ def run() -> None:
     explainer = create_explainer(ensemble)
 
     processed_count = 0
-    last_seen_id = "0"
 
     try:
         while not _shutdown:
@@ -230,15 +227,15 @@ def run() -> None:
                         iso_forest=iso_forest,
                     )
 
-                    attack_type : str | None = None
+                    attack_type: str | None = None
                     if prediction_result.prediction == "ATTACK" and multiclass is not None:
                         payload_df = packet.to_frame().T
                         multiclass_proba = multiclass.predict_proba(payload_df)[0]
                         multiclass_class_id = int(np.argmax(multiclass_proba))
                         if label_map is not None:
-                            attack_type =(label_map.get(multiclass_class_id))
+                            attack_type = (label_map.get(multiclass_class_id))
                         else:
-                            attack_type =(multiclass_class_id)
+                            attack_type = (multiclass_class_id)
 
                     prediction_int = int(
                         np.argmax(ensemble.predict_proba(packet.to_frame().T)[0])

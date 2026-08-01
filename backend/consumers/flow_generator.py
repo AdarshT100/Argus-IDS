@@ -36,7 +36,7 @@ _COLS_TO_DROP: list[str] = ["Flow ID", "Source IP", "Destination IP", "Timestamp
 # held_out_eval.csv must never enter any training or streaming pipeline (§10, §14)
 _EXCLUDED_FILENAMES: frozenset[str] = frozenset({"held_out_eval.csv"})
 
-# Canonical CICIDS2017 day order — mirrors training file narrative 
+# Canonical CICIDS2017 day order — mirrors training file narrative
 _CANONICAL_ORDER: list[str] = [
     "Tuesday-WorkingHours.pcap_ISCX.csv",
     "Wednesday-workingHours.pcap_ISCX.csv",
@@ -67,7 +67,7 @@ def discover_csv_files(data_dir: str) -> list[Path]:
     """
     data_path = Path(data_dir)
     if not data_path.is_dir():
-                raise FileNotFoundError(
+        raise FileNotFoundError(
             f"ARGUS_DATA_DIR not found or is not a directory: {data_dir!r}"
         )
     available: set[str] = {
@@ -91,6 +91,7 @@ def discover_csv_files(data_dir: str) -> list[Path]:
         log.info("  %s", csv_path.name)
 
     return csv_files
+
 
 # ── Cleaning ──────────────────────────────────────────────────────────────────
 
